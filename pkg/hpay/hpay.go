@@ -15,6 +15,7 @@ import (
 	"github.com/robertlestak/hpay/pkg/auth"
 	"github.com/robertlestak/hpay/pkg/payment"
 	"github.com/robertlestak/hpay/pkg/upstream"
+	"github.com/robertlestak/hpay/pkg/vault"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -177,6 +178,20 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	l.Debug("no claims")
 	w.WriteHeader(http.StatusPaymentRequired)
+	// loop through payment requests to create addrs if necessary
+	for _, pr := range meta.Payment.Requests {
+		// if site owner has not provided static address, create one
+		if pr.Address == "" {
+			newWallet, werr := vault.NewWallet()
+			if werr != nil {
+				l.WithError(werr).Error("Failed to create wallet")
+				http.Error(w, "Failed to create wallet", http.StatusInternalServerError)
+				return
+			}
+			// store address in the payment request
+			pr.Address = newWallet.Address
+		}
+	}
 	mjson, err := json.Marshal(meta)
 	if err != nil {
 		l.WithError(err).Error("Failed to marshal meta")
@@ -190,6 +205,11 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	meta.Payment.EncryptedMeta = base64.StdEncoding.EncodeToString(em)
+	if mherr := meta.Payment.CreateMetaHash(); mherr != nil {
+		l.WithError(mherr).Error("Failed to create meta hash")
+		http.Error(w, "Failed to create meta hash", http.StatusInternalServerError)
+		return
+	}
 	l.WithField("meta", meta).Debug("Encrypted meta")
 	pageData := &Page{
 		Meta:  meta,
@@ -242,11 +262,12 @@ func (m *Meta) ValidatePayment() error {
 	return nil
 }
 
-func ValidateEncryptedPayment(txid string, network string, encrypted string) error {
+func ValidateEncryptedPayment(txid string, network string, encrypted string, metaHash string) error {
 	l := log.WithFields(log.Fields{
-		"action":  "ValidateEncryptedPayment",
-		"txid":    txid,
-		"network": network,
+		"action":   "ValidateEncryptedPayment",
+		"txid":     txid,
+		"network":  network,
+		"metaHash": metaHash,
 	})
 	l.Debug("start")
 	defer l.Debug("end")
@@ -272,6 +293,8 @@ func ValidateEncryptedPayment(txid string, network string, encrypted string) err
 	}
 	meta.Payment.Txid = txid
 	meta.Payment.Network = network
+	meta.Payment.MetaHash = metaHash
+	meta.Payment.EncryptedMeta = encrypted
 	l.WithField("meta", meta).Debug("Unmarshaled")
 	if err := meta.ValidatePayment(); err != nil {
 		l.WithError(err).Error("Failed to validate payment")

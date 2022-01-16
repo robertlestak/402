@@ -12,6 +12,7 @@ import (
 	"github.com/robertlestak/hpay/pkg/hpay"
 	"github.com/robertlestak/hpay/pkg/payment"
 	"github.com/robertlestak/hpay/pkg/upstream"
+	"github.com/robertlestak/hpay/pkg/vault"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -40,15 +41,18 @@ func init() {
 	if perr := pubsub.Init(); perr != nil {
 		l.WithError(perr).Fatal("Failed to initialize pubsub")
 	}
+	go pubsub.ActiveJobsWorker(hpay.ValidateEncryptedPayment)
 	derr := db.Init()
 	if derr != nil {
 		l.WithError(derr).Fatal("Failed to initialize database")
 	}
 	go db.Healthchecker()
-	go pubsub.ActiveJobsWorker(hpay.ValidateEncryptedPayment)
-
 	db.DB.AutoMigrate(&payment.Payment{})
 	db.DB.AutoMigrate(&payment.PaymentRequest{})
+	_, verr := vault.NewClient()
+	if verr != nil {
+		l.WithError(verr).Fatal("Failed to initialize vault")
+	}
 	l.Info("end")
 }
 

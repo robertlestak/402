@@ -1,12 +1,15 @@
 package payment
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 
 	"github.com/robertlestak/hpay/internal/db"
+	"github.com/robertlestak/hpay/pkg/vault"
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -21,11 +24,12 @@ type PaymentRequest struct {
 
 type Payment struct {
 	gorm.Model
-	Txid          string           `json:"txid"`
-	Network       string           `json:"network"`
-	Requests      []PaymentRequest `json:"requests"`
-	Token         string           `json:"token" gorm:"-"`
-	EncryptedMeta string           `json:"encrypted_meta" gorm:"-"`
+	Txid          string            `json:"txid"`
+	Network       string            `json:"network"`
+	Requests      []*PaymentRequest `json:"requests"`
+	Token         string            `json:"token" gorm:"-"`
+	MetaHash      string            `json:"meta_hash" gorm:"-"`
+	EncryptedMeta string            `json:"encrypted_meta" gorm:"-"`
 }
 
 type Tx struct {
@@ -34,6 +38,45 @@ type Tx struct {
 	ToAddr   string
 	FromAddr string
 	Value    int64
+}
+
+func (p *Payment) CreateMetaHash() error {
+	jd, jerr := json.Marshal(p.Requests)
+	if jerr != nil {
+		return jerr
+	}
+	data := []byte(p.EncryptedMeta + string(jd) + os.Getenv("HASH_SECRET"))
+	hash := sha256.Sum256(data)
+	p.MetaHash = fmt.Sprintf("%x", hash[:])
+	return nil
+}
+
+func (p *Payment) ValidateMetaHash() error {
+	l := log.WithFields(log.Fields{
+		"action":  "Payment.ValidateMetaHash",
+		"payment": p,
+	})
+	l.Debug("start")
+	if p.MetaHash == "" {
+		l.Error("meta hash is empty")
+		return errors.New("meta hash is empty")
+	}
+	if p.EncryptedMeta == "" {
+		l.Error("encrypted meta is empty")
+		return errors.New("encrypted meta is empty")
+	}
+	tp := p
+	terr := tp.CreateMetaHash()
+	if terr != nil {
+		l.WithError(terr).Error("Failed to create meta hash")
+		return terr
+	}
+	if p.MetaHash != tp.MetaHash {
+		l.Error("meta hash is not valid")
+		return errors.New("meta hash is not valid")
+	}
+	l.Debug("meta hash is valid")
+	return nil
 }
 
 func (p *Payment) Save() error {
@@ -138,6 +181,8 @@ func (p *Payment) ValidateAPI() (Tx, error) {
 	return Tx{}, errors.New("no valid tx found")
 }
 
+// Validate both validates a payment and saves the data to prevent double validation
+// should probably rename to be more descriptive
 func (p *Payment) Validate() error {
 	l := log.WithFields(log.Fields{
 		"action":  "Payment.Validate",
@@ -159,13 +204,28 @@ func (p *Payment) Validate() error {
 		l.Debug("payment already exists")
 		return errors.New("payment already exists")
 	}
-	if _, verr := p.ValidateAPI(); verr != nil {
+	if mherr := p.ValidateMetaHash(); mherr != nil {
+		l.WithError(mherr).Error("Failed to validate meta hash")
+		return mherr
+	}
+	var tx Tx
+	var verr error
+	if tx, verr = p.ValidateAPI(); verr != nil {
 		l.WithError(verr).Error("Failed to validate tx")
 		return verr
 	}
 	if serr := p.Save(); serr != nil {
 		l.WithError(serr).Error("Failed to save payment")
 		return serr
+	}
+	wallet := &vault.Wallet{
+		Address: tx.ToAddr,
+		Network: p.Network,
+		Txid:    tx.Hash,
+	}
+	if err := wallet.AddTxData(); err != nil {
+		l.WithError(err).Error("Failed to add tx data")
+		return err
 	}
 	return nil
 }

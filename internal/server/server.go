@@ -59,6 +59,14 @@ func handlePaymentSocket(conn *websocket.Conn) error {
 		}
 		return nil
 	}
+	if payment.MetaHash == "" {
+		l.Error("metaHash is empty")
+		if err := conn.WriteJSON(wsError{Error: "metaHash empty"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return nil
+	}
 	if !utils.NetworkSupported(payment.Network) {
 		l.Error("network not supported")
 		if err := conn.WriteJSON(wsError{Error: "network not supported"}); err != nil {
@@ -95,7 +103,7 @@ func handlePaymentSocket(conn *websocket.Conn) error {
 		}
 		return nil
 	}
-	pubsub.AddJob(payment.Txid, payment.Network, payment.EncryptedMeta)
+	pubsub.AddJob(payment.Txid, payment.Network, payment.EncryptedMeta, payment.MetaHash)
 	subscriber := pubsub.JobCompleteSubscriber(payment.Network)
 	go func() {
 		for {

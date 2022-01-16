@@ -44,17 +44,19 @@ func Init() error {
 	return nil
 }
 
-func AddJob(txid string, network string, encryptedMeta string) error {
+func AddJob(txid string, network string, encryptedMeta string, metaHash string) error {
 	key := jobsPrefix + network
 	l := log.WithFields(log.Fields{
-		"package": "pubsub",
-		"method":  "AddJob",
-		"txid":    txid,
-		"network": network,
-		"key":     key,
+		"package":  "pubsub",
+		"method":   "AddJob",
+		"txid":     txid,
+		"network":  network,
+		"key":      key,
+		"metaHash": metaHash,
 	})
 	l.Info("Adding job")
-	return Client.HSet(key, txid, encryptedMeta).Err()
+	data := encryptedMeta + ":" + metaHash
+	return Client.HSet(key, txid, data).Err()
 }
 
 func PublishComplete(txid string, network string) error {
@@ -146,7 +148,7 @@ func GetEncryptedMeta(txid string, network string) (string, error) {
 	return Client.HGet(key, txid).Result()
 }
 
-func ActiveJobs(fx func(string, string, string) error) error {
+func ActiveJobs(fx func(string, string, string, string) error) error {
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",
 		"method":  "ActiveJobs",
@@ -181,12 +183,15 @@ func ActiveJobs(fx func(string, string, string) error) error {
 		txs := scmd.Val()
 		for _, t := range txs {
 			l.Infof("check work for %s %s", b, t)
-			em, derr := GetEncryptedMeta(t, b)
+			emd, derr := GetEncryptedMeta(t, b)
 			if derr != nil {
 				l.Error(derr)
 				return derr
 			}
-			if err := fx(t, b, em); err != nil {
+			emds := strings.Split(emd, ":")
+			em := emds[0]
+			mh := emds[1]
+			if err := fx(t, b, em, mh); err != nil {
 				l.Error(err)
 				if cerr := PublishError(t, b, err.Error()); cerr != nil {
 					l.WithField("txid", t).Error("Failed to publish error")
@@ -204,7 +209,7 @@ func ActiveJobs(fx func(string, string, string) error) error {
 	return nil
 }
 
-func ActiveJobsWorker(fx func(string, string, string) error) error {
+func ActiveJobsWorker(fx func(string, string, string, string) error) error {
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",
 		"method":  "ActiveJobsWorker",

@@ -111,6 +111,7 @@ function paymentComplete(txid, network) {
         txid: txid,
         network: network,
         encrypted_meta: "{{.Meta.Payment.EncryptedMeta}}",
+        meta_hash: "{{.Meta.Payment.MetaHash}}",
     }
     ws.send(JSON.stringify(data))
     // show a loading indicator while we wait for payment to clear
