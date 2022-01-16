@@ -1,0 +1,130 @@
+{{define "title"}}Payment Required{{end}}
+
+{{define "body"}}
+
+{{ if .Meta.Customization.CSS }}
+<link rel="stylesheet" href="{{.Meta.Customization.CSS}}">
+{{ end }}
+
+<div class="container">
+    <h1>Payment Required</h1>
+
+    <div class="requested-claims">
+        
+        <h2>Requested Claims</h2>
+        
+        {{ range $key, $value := .Meta.Claims }}
+            <div class="claim">
+                    <li><strong>{{ $key }}</strong>: {{ $value }}</li>
+            </div>
+        {{end}}
+    </div>
+
+    <div class="expiry">
+        <h2>Expiry</h2>
+
+        {{if eq .Meta.Exp 0 }}
+            <p>No expiry</p>
+        {{else}}
+            <p>{{.Meta.Exp}}</p>
+        {{end}}
+
+
+    </div>
+
+    {{ if .Meta.Customization.Image }}
+    <div class="image">
+        <img src="{{.Meta.Customization.Image}}">
+    </div>
+    {{ end }}
+
+    <div class='payment-requests'>
+        
+        <h2>Payment Requests</h2>
+
+        {{ if not .Meta.Payment.Requests }}
+            no payment requests
+        {{ end }}
+
+        {{ range .Meta.Payment.Requests }}
+            <div class='payment-request'>
+                <div class='payment-request--amount'>
+                    Amount: {{.Amount}}
+                </div>
+                <div class='payment-request--network'>
+                    Network: {{.Network}}
+                </div>
+                <div class='payment-request--address'>
+                    Address: {{.Address}}
+                </div>
+            </div>
+        {{ end }}
+
+        <h3>Payment Complete</h3>
+        <input type="text" id="payment-complete-txid" placeholder="txid">
+        <br>
+        <input type="text" id="payment-complete-network" placeholder="network">
+        <br>
+        <button id="payment-complete-button">Payment Complete</button>
+    </div>
+
+</div>
+
+<script>
+    var ws;
+(function() {
+    var wsUrl = "{{.WSURL}}";
+    if (window.WebSocket === undefined) {
+        // TODO: fallback to polling
+        return;
+    } else {
+        ws = initWS();
+    }
+
+    function initWS() {
+        var socket = new WebSocket(wsUrl)
+        socket.onopen = function() {
+            console.log("socket open")
+        };
+        socket.onmessage = function (e) {
+            console.log("socket message", e.data)
+            var data = JSON.parse(e.data)
+            if (data.error) {
+                console.log("error", data.error)
+            } else if (data.txid && data.token) {
+                // payment validated
+                // the cookie should expire with the expiry of the token
+                document.cookie = "402_token=" + data.token + "; path=/";
+                // this is probably not the best way to do this
+                location.reload();
+            }
+        }
+        socket.onclose = function () {
+            console.log("socket closed")
+        }
+        return socket;
+    }
+})()
+
+function paymentComplete(txid, network) {
+    var data = {
+        txid: txid,
+        network: network,
+        encrypted_meta: "{{.Meta.Payment.EncryptedMeta}}",
+    }
+    ws.send(JSON.stringify(data))
+    // show a loading indicator while we wait for payment to clear
+}
+
+document.querySelector('#payment-complete-button').addEventListener('click', function() {
+    var txid = document.querySelector('#payment-complete-txid').value
+    var network = document.querySelector('#payment-complete-network').value
+    paymentComplete(txid, network)
+})
+</script>
+
+{{ if .Meta.Customization.JS }}
+<script src="{{.Meta.Customization.JS}}"></script>
+{{ end }}
+
+{{end}}

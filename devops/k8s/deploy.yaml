@@ -1,0 +1,64 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpay-v1
+  namespace: humun-client-svcs
+  labels:
+    app: hpay
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hpay
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: hpay
+        version: v1
+    spec:
+      serviceAccountName: hpay
+      containers:
+      - name: humun
+        image: registry.lestak.sh/402:v0.0.1
+        args:
+        - server
+        resources:
+          limits:
+            memory: 1000Mi
+            cpu: 1000m
+          requests:
+            memory: 500Mi
+            cpu: 50m
+        ports:
+        - containerPort: 80
+        envFrom:
+        - secretRef:
+            name: hpay-v1
+        volumeMounts:
+        - name: conf
+          mountPath: /config
+      volumes:
+      - name: conf
+        configMap:
+          name: hpay-conf
+        
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hpay-conf
+  namespace: humun-client-svcs
+data:
+  upstreams.yaml: |
+    - name: default
+      method: http
+      endpoint: http://localhost:3000
+      selector:
+        hosts:
+        - "*"
+        paths:
+        - "*"
+        headers: {}

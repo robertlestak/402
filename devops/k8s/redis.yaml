@@ -1,0 +1,68 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpay-redis
+  namespace: humun-client-svcs
+  labels:
+    app: hpay-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hpay-redis
+  template:
+    metadata:
+      labels:
+        app: hpay-redis
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+      - name: redis
+        image: redis
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 4000m
+            memory: 8Gi
+        ports:
+          - containerPort: 6379
+            name: tcp-redis
+        volumeMounts:
+        - name: redis
+          mountPath: /data
+      volumes:
+      - name: redis
+        persistentVolumeClaim:
+          claimName: hpay-redis
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hpay-redis
+  namespace: humun-client-svcs
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hpay-redis
+  namespace: humun-client-svcs
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: hpay-redis
+  ports:
+    - protocol: TCP
+      name: tcp-redis
+      port: 6379
+      targetPort: 6379
