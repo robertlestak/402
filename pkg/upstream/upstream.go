@@ -266,11 +266,9 @@ func (u *Upstream) HTMLResource(r string) (map[string]string, error) {
 		var ok bool
 		if key, ok = s.Attr("name"); !ok {
 			l.Debug("No name attribute")
-			return
 		}
 		if val, ok = s.Attr("content"); !ok {
 			l.Debug("No content attribute")
-			return
 		}
 		if key != "" && val != "" {
 			headers[key] = val
