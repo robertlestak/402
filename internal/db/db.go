@@ -10,8 +10,10 @@ import (
 	"gorm.io/gorm"
 )
 
+// DB is the global database connection
 var DB *gorm.DB
 
+// Init initializes the database connection
 func Init() error {
 	dsn := fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable",
 		os.Getenv("DB_HOST"),
@@ -28,6 +30,7 @@ func Init() error {
 	return nil
 }
 
+// Paginate provides a paginator function
 func Paginate(page, pageSize int) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if page == 0 {
@@ -46,6 +49,7 @@ func Paginate(page, pageSize int) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
+// Ping checks the database connection
 func Ping(db *gorm.DB) error {
 	d, derr := db.DB()
 	if derr != nil {
@@ -54,6 +58,7 @@ func Ping(db *gorm.DB) error {
 	return d.Ping()
 }
 
+// Healthcheck checks the database connection with Ping, and can be extended for deeper health checks
 func Healthcheck() error {
 	if err := Ping(DB); err != nil {
 		return err
@@ -61,6 +66,7 @@ func Healthcheck() error {
 	return nil
 }
 
+// Healthchecker continually checks the DB connection and logs Fatal on any error, assuming orchestrator will handle restarts
 func Healthchecker() error {
 	for {
 		if err := Healthcheck(); err != nil {

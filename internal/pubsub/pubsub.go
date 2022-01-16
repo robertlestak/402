@@ -15,16 +15,22 @@ import (
 )
 
 var (
-	Client            *redis.Client
+	// Client is the redis client
+	Client *redis.Client
+	// DefaultExpiration is the default expiration time of a job
 	DefaultExpiration = time.Hour
 )
 
 const (
-	cachePrefix                 = "pubsub:"
-	jobsPrefix                  = "jobs:"
+	// cachePrefix is the prefix for the pubsub
+	cachePrefix = "pubsub:"
+	// jobsPrefix is the prefix for the jobs
+	jobsPrefix = "jobs:"
+	// JobPubSubCompleteNameSuffix is the suffix for the complete pubsub
 	JobPubSubCompleteNameSuffix = ":complete"
 )
 
+// Init initializes the pubsub client
 func Init() error {
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",
@@ -44,6 +50,7 @@ func Init() error {
 	return nil
 }
 
+// AddJob adds a job to the queue
 func AddJob(txid string, network string, encryptedMeta string, metaHash string) error {
 	key := jobsPrefix + network
 	l := log.WithFields(log.Fields{
@@ -59,6 +66,7 @@ func AddJob(txid string, network string, encryptedMeta string, metaHash string) 
 	return Client.HSet(key, txid, data).Err()
 }
 
+// PublishComplete publishes the job complete and removes it from the queue
 func PublishComplete(txid string, network string) error {
 	key := cachePrefix + network + JobPubSubCompleteNameSuffix
 	l := log.WithFields(log.Fields{
@@ -73,7 +81,9 @@ func PublishComplete(txid string, network string) error {
 	return Client.Publish(key, txid).Err()
 }
 
-func PublishError(txid string, network string, err string) error {
+// PublishError publishes the job error and depending on the error type,
+// it can be removed from the queue or left to be retried later
+func PublishError(txid string, network string, err string, remove bool) error {
 	key := cachePrefix + network + JobPubSubCompleteNameSuffix
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",
@@ -82,12 +92,19 @@ func PublishError(txid string, network string, err string) error {
 		"network": network,
 		"key":     key,
 		"err":     err,
+		"remove":  remove,
 	})
 	l.Info("Publishing error")
-	Client.HDel(jobsPrefix+network, txid)
+	if remove {
+		l.Info("Removing job")
+		Client.HDel(jobsPrefix+network, txid)
+	} else {
+		l.Info("Leaving job")
+	}
 	return Client.Publish(key, txid+":"+err).Err()
 }
 
+// JobCompleteSubscriber returns a subscriber for the job complete channel
 func JobCompleteSubscriber(network string) *redis.PubSub {
 	key := cachePrefix + network + JobPubSubCompleteNameSuffix
 	l := log.WithFields(log.Fields{
@@ -101,7 +118,9 @@ func JobCompleteSubscriber(network string) *redis.PubSub {
 	return subscriber
 }
 
-func JobCompleteNow(ctx context.Context, txid string, network string) (string, error) {
+// JobCompleteNow will wait for the job to be completed
+// if either the context is canceled or the timeout is exceeded, it will return
+func JobCompleteNow(ctx context.Context, txid string, network string, timeout time.Duration) (string, error) {
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",
 		"method":  "JobCompleteNow",
@@ -130,12 +149,18 @@ func JobCompleteNow(ctx context.Context, txid string, network string) (string, e
 		case <-ctx.Done():
 			l.Info("Context done")
 			return "", nil
+		case <-time.After(timeout):
+			l.Info("Timeout")
+			return "", errors.New("timeout")
 		default:
 			continue
 		}
 	}
 }
 
+// GetEncryptedMeta retrieves the encrypted meta object from the cache
+// encrypted meta schema is stored as "encryptedMeta:metaHash" where
+// encryptedMeta is the encrypted meta object and metaHash is the hash of the encrypted meta + recipients + secret
 func GetEncryptedMeta(txid string, network string) (string, error) {
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",
@@ -148,6 +173,31 @@ func GetEncryptedMeta(txid string, network string) (string, error) {
 	return Client.HGet(key, txid).Result()
 }
 
+// removableError checks the error and returns true
+// the error is unrecoverable and warrants the job being removed from the queue
+func removableError(err error) bool {
+	l := log.WithFields(log.Fields{
+		"package": "pubsub",
+		"method":  "removableError",
+		"err":     err,
+	})
+	l.Info("Checking error")
+	var removable bool
+	switch err.Error() {
+	case "timeout":
+		removable = false
+	case "context canceled":
+		removable = false
+	case "context deadline exceeded":
+		removable = false
+	default:
+		removable = false
+	}
+	return removable
+}
+
+// ActiveJobs finds the currently pending jobs in the queue
+// and passes the job data into the input function fx
 func ActiveJobs(fx func(string, string, string, string) error) error {
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",
@@ -193,7 +243,7 @@ func ActiveJobs(fx func(string, string, string, string) error) error {
 			mh := emds[1]
 			if err := fx(t, b, em, mh); err != nil {
 				l.Error(err)
-				if cerr := PublishError(t, b, err.Error()); cerr != nil {
+				if cerr := PublishError(t, b, err.Error(), removableError(err)); cerr != nil {
 					l.WithField("txid", t).Error("Failed to publish error")
 					return cerr
 				}
@@ -209,6 +259,8 @@ func ActiveJobs(fx func(string, string, string, string) error) error {
 	return nil
 }
 
+// ActiveJobsWorker is a worker that will check for active jobs
+// and execute the input function fx on each job
 func ActiveJobsWorker(fx func(string, string, string, string) error) error {
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",

@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// PaymentRequest contains a single network payment request
 type PaymentRequest struct {
 	gorm.Model
 	PaymentID uint   `gorm:"index"`
@@ -22,6 +23,9 @@ type PaymentRequest struct {
 	Address   string `json:"address"`
 }
 
+// Payment contains a payment for a request, including all the configured network payment requests
+// when returned from a user, the txid and network will be filled, and these will then be validated
+// on the chain before saving to the database
 type Payment struct {
 	gorm.Model
 	Txid          string            `json:"txid"`
@@ -32,6 +36,7 @@ type Payment struct {
 	EncryptedMeta string            `json:"encrypted_meta" gorm:"-"`
 }
 
+// Tx is a generic representation of a transaction on the blockchain
 type Tx struct {
 	Status   int
 	Hash     string
@@ -40,6 +45,7 @@ type Tx struct {
 	Value    int64
 }
 
+// CreateMetaHash creates a hash of the payment meta data
 func (p *Payment) CreateMetaHash() error {
 	jd, jerr := json.Marshal(p.Requests)
 	if jerr != nil {
@@ -51,6 +57,7 @@ func (p *Payment) CreateMetaHash() error {
 	return nil
 }
 
+// ValidateMetaHash validates the meta hash with the payment meta data
 func (p *Payment) ValidateMetaHash() error {
 	l := log.WithFields(log.Fields{
 		"action":  "Payment.ValidateMetaHash",
@@ -79,6 +86,7 @@ func (p *Payment) ValidateMetaHash() error {
 	return nil
 }
 
+// Save saves the payment to the database
 func (p *Payment) Save() error {
 	l := log.WithFields(log.Fields{
 		"action":  "Payment.Save",
@@ -92,6 +100,7 @@ func (p *Payment) Save() error {
 	return nil
 }
 
+// Get gets the payment from the database
 func (p *Payment) Get() error {
 	l := log.WithFields(log.Fields{
 		"action":  "Payment.Get",
@@ -113,6 +122,8 @@ func (p *Payment) Get() error {
 	return nil
 }
 
+// ValidateAPI validates the payment request against the blockchain through
+// a network call to a blockchain index API
 func (p *Payment) ValidateAPI() (Tx, error) {
 	l := log.WithFields(log.Fields{
 		"action":  "Payment.ValidateAPI",
@@ -230,6 +241,7 @@ func (p *Payment) Validate() error {
 	return nil
 }
 
+// HandleCheckPaymentValid handles the check payment valid route
 func HandleCheckPaymentValid(w http.ResponseWriter, r *http.Request) {
 	l := log.WithFields(log.Fields{
 		"action": "HandleCheckPaymentValid",

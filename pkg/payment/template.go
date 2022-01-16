@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// TemplatedPage creates a html page with the given template and meta data
 func TemplatedPage(w io.Writer, meta interface{}, p string) error {
 	l := log.WithFields(log.Fields{
 		"action": "TemplatedPage",

@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Wallet is a struct for holding wallet data
 type Wallet struct {
 	Type       string `json:"type"`
 	Address    string `json:"address"`
@@ -20,6 +21,7 @@ type Wallet struct {
 	Network    string `json:"network"`
 }
 
+// NewWallet creates a new wallet and stores it to Vault
 func NewWallet() (*Wallet, error) {
 	w, err := NewEphemeralWallet()
 	if err != nil {
@@ -33,6 +35,7 @@ func NewWallet() (*Wallet, error) {
 	return w, nil
 }
 
+// NewEphemeralWallet creates a new wallet but does not store it
 func NewEphemeralWallet() (*Wallet, error) {
 	w := &Wallet{}
 	privateKey, err := crypto.GenerateKey()
@@ -56,6 +59,7 @@ func NewEphemeralWallet() (*Wallet, error) {
 	return w, nil
 }
 
+// WriteVault writes wallet data to Vault
 func (w *Wallet) WriteVault() error {
 	l := log.WithFields(log.Fields{
 		"action": "WriteVault",
@@ -77,6 +81,8 @@ func (w *Wallet) WriteVault() error {
 	return nil
 }
 
+// GetByAddress gets wallet data from Vault by address
+// this should only be called by trusted code as it will return private keys in plain text
 func (w *Wallet) GetByAddress() error {
 	l := log.WithFields(log.Fields{
 		"action":  "GetByAddress",
@@ -103,6 +109,7 @@ func (w *Wallet) GetByAddress() error {
 	return nil
 }
 
+// AddTxData retrieves a wallet from vault by address and adds txid and network
 func (w *Wallet) AddTxData() error {
 	l := log.WithFields(log.Fields{
 		"action":  "AddTxData",

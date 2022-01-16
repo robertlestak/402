@@ -18,9 +18,11 @@ import (
 )
 
 var (
+	// SignKeys is a map of key IDs to private keys
 	SignKeys = make(map[string]*rsa.PrivateKey)
 )
 
+// CreateJWKS creates a JWKS document with the current sign keys
 func CreateJWKS() (string, error) {
 	var keys struct {
 		Keys []jwk.Key `json:"keys"`
@@ -41,6 +43,7 @@ func CreateJWKS() (string, error) {
 	return string(buf), nil
 }
 
+// GetKey returns the key for the given key ID
 func GetKey(id string) (*rsa.PrivateKey, error) {
 	l := log.WithFields(log.Fields{
 		"func": "GetKey",
@@ -52,6 +55,7 @@ func GetKey(id string) (*rsa.PrivateKey, error) {
 	return nil, fmt.Errorf("key not found: %s", id)
 }
 
+// HandleCreateJWKS handles the creation of a JWKS document
 func HandleCreateJWKS(w http.ResponseWriter, r *http.Request) {
 	l := log.WithFields(log.Fields{
 		"func": "HandleCreateJWKS",
@@ -68,6 +72,7 @@ func HandleCreateJWKS(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(jwks))
 }
 
+// InitSignKeys initializes the sign keys
 func InitSignKeys() error {
 	l := log.WithFields(log.Fields{
 		"func": "InitSignKeys",
@@ -95,6 +100,7 @@ func InitSignKeys() error {
 	return nil
 }
 
+// GenerateJWT generates a JWT with the provided claims
 func GenerateJWT(claims map[string]interface{}, exp time.Time, keyID string) (string, error) {
 	fields := log.Fields{
 		"func": "GenerateJWT",
@@ -128,12 +134,17 @@ func GenerateJWT(claims map[string]interface{}, exp time.Time, keyID string) (st
 	return tokenString, nil
 }
 
+// GenerateRootJWT generates a root JWT with the provided claims
+// this function should only be available to the root user
 func GenerateRootJWT(exp time.Time) (string, error) {
 	return GenerateJWT(map[string]interface{}{
 		"sub": "root",
 	}, exp, utils.KeyID())
 }
 
+// ParseClaimsUnverified parses the claims from the JWT without verifying the signature
+// this is useful if we are either relying on an auth gateway ahead of us, or if we are simply
+// trying to read claims from the JWT without actually validating they are accurate.
 func ParseClaimsUnverified(t string) (*jwt.Token, jwt.MapClaims, error) {
 	l := log.WithFields(log.Fields{
 		"func": "ParseClaimsUnverified",
@@ -156,6 +167,7 @@ func ParseClaimsUnverified(t string) (*jwt.Token, jwt.MapClaims, error) {
 	return token, claims, nil
 }
 
+// ValidateJWT validates the JWT and returns the claims
 func ValidateJWT(token string) (*jwt.Token, jwt.MapClaims, error) {
 	l := log.WithFields(log.Fields{
 		"func": "ValidateJWT",
@@ -208,6 +220,7 @@ func ValidateJWT(token string) (*jwt.Token, jwt.MapClaims, error) {
 	}
 }
 
+// ValidateClaims validates the requested claims against the claims of the JWT provided
 func ValidateClaims(jwtClaims jwt.MapClaims, requestedClaims jwt.MapClaims) error {
 	l := log.WithFields(log.Fields{
 		"func":            "ValidateClaims",
@@ -230,6 +243,7 @@ func ValidateClaims(jwtClaims jwt.MapClaims, requestedClaims jwt.MapClaims) erro
 	return nil
 }
 
+// TokenIsRoot returns true if the provided token has a root sub
 func TokenIsRoot(token string) bool {
 	l := log.WithFields(log.Fields{
 		"func": "TokenIsRoot",
@@ -250,6 +264,7 @@ func TokenIsRoot(token string) bool {
 	return false
 }
 
+// HandleValidateJWT handles the validation of a provided JWT
 func HandleValidateJWT(w http.ResponseWriter, r *http.Request) {
 	l := log.WithFields(log.Fields{
 		"func": "HandleValidateJWT",

@@ -11,14 +11,18 @@ import (
 )
 
 var (
-	Client            *redis.Client
+	// Client contains the redis client
+	Client *redis.Client
+	// DefaultExpiration is the default expiration time of a cache entry
 	DefaultExpiration = time.Hour
 )
 
 const (
+	// cachePrefix is the prefix for all cache keys
 	cachePrefix = "cache:"
 )
 
+// Init initializes the redis client
 func Init() error {
 	l := log.WithFields(log.Fields{
 		"package": "cache",
@@ -38,6 +42,7 @@ func Init() error {
 	return nil
 }
 
+// Get returns the value of the key
 func Get(key string) (string, error) {
 	l := log.WithFields(log.Fields{
 		"package": "cache",
@@ -55,6 +60,7 @@ func Get(key string) (string, error) {
 	return cmd.Result()
 }
 
+// Set sets the value of the key with the given expiration time
 func Set(key string, value string, exp time.Duration) error {
 	l := log.WithFields(log.Fields{
 		"package": "cache",
@@ -69,6 +75,7 @@ func Set(key string, value string, exp time.Duration) error {
 	return nil
 }
 
+// Del deletes the key
 func Del(key string) error {
 	l := log.WithFields(log.Fields{
 		"package": "cache",

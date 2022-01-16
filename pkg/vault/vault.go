@@ -11,9 +11,11 @@ import (
 )
 
 var (
+	// Client is the vault client
 	Client *api.Client
 )
 
+// insertSliceString inserts a string into a slice at a given index
 func insertSliceString(a []string, index int, value string) []string {
 	if len(a) == index { // nil or empty slice or after last element
 		return append(a, value)
@@ -23,6 +25,7 @@ func insertSliceString(a []string, index int, value string) []string {
 	return a
 }
 
+// NewClient creates a new vault client
 func NewClient() (*api.Client, error) {
 	l := log.WithFields(log.Fields{
 		"action": "NewClient",
@@ -39,6 +42,7 @@ func NewClient() (*api.Client, error) {
 	return client, nil
 }
 
+// GetToken gets a new token
 func GetToken() (string, error) {
 	l := log.WithFields(log.Fields{
 		"action": "getToken",
@@ -67,6 +71,7 @@ func GetToken() (string, error) {
 	return resp.Auth.ClientToken, nil
 }
 
+// GetSecretWithFreshToken gets a secret from vault with a fresh token
 func GetSecretWithFreshToken(p string) (map[string]interface{}, error) {
 	l := log.WithFields(log.Fields{
 		"action": "GetSecretWithFreshToken",
@@ -94,6 +99,7 @@ func GetSecretWithFreshToken(p string) (map[string]interface{}, error) {
 	return data, nil
 }
 
+// WriteSecretWithFreshToken writes a secret to vault with a fresh token
 func WriteSecretWithFreshToken(p string, sec map[string]interface{}) error {
 	l := log.WithFields(log.Fields{
 		"action": "WriteSecretWithFreshToken",
@@ -118,6 +124,7 @@ func WriteSecretWithFreshToken(p string, sec map[string]interface{}) error {
 	return nil
 }
 
+// ListSecrets lists the secrets at a given path
 func ListSecrets(p string) ([]string, error) {
 	if Client == nil {
 		return nil, errors.New("vault client not initialized")
@@ -146,6 +153,7 @@ func ListSecrets(p string) ([]string, error) {
 	return keys, nil
 }
 
+// ListSecretsRetry lists the secrets at a given path with retry
 func ListSecretsRetry(p string) ([]string, error) {
 	var keys []string
 	var err error

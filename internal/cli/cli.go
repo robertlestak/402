@@ -8,6 +8,7 @@ import (
 	"github.com/robertlestak/hpay/pkg/auth"
 )
 
+// Cli is the entrypoint func for cli operations
 func Cli() error {
 	if len(os.Args) < 3 {
 		return fmt.Errorf("usage: 402 cli <action>")

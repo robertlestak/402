@@ -16,22 +16,28 @@ import (
 )
 
 var (
+	// Upstreams contains the upstreams configuration
 	Upstreams []Upstream
 )
 
 const (
+	// MethodHTTP represents a HTTP HEAD request
 	MethodHTTP HPayMethod = "http"
+	// MethodHTML represents a HTML GET request
 	MethodHTML HPayMethod = "html"
 )
 
+// HPayMethod represents the configured method for an upstream
 type HPayMethod string
 
+// UpstreamSelector represents the selectors for an upstream
 type UpstreamSelector struct {
 	Hosts   []*string          `json:"hosts" yaml:"hosts"`
 	Paths   []*string          `json:"paths" yaml:"paths"`
 	Headers *map[string]string `json:"headers" yaml:"headers"`
 }
 
+// Upstream represents an upstream
 type Upstream struct {
 	Name     *string           `json:"name" yaml:"name"`
 	Endpoint *string           `json:"endpoint" yaml:"endpoint"`
@@ -39,6 +45,7 @@ type Upstream struct {
 	Selector *UpstreamSelector `json:"selector" yaml:"selector"`
 }
 
+// Init initializes the upstreams
 func Init(f string) error {
 	l := log.WithFields(log.Fields{
 		"action": "Upstream.Init",
@@ -60,6 +67,7 @@ func Init(f string) error {
 	return nil
 }
 
+// UpstreamForRequest inspects the incoming request, checks the selectors, and returns the matching upstream
 func UpstreamForRequest(r *http.Request) (*Upstream, error) {
 	l := log.WithFields(log.Fields{
 		"action": "UpstreamForRequest",
@@ -119,6 +127,7 @@ func UpstreamForRequest(r *http.Request) (*Upstream, error) {
 	return &Upstreams[0], nil
 }
 
+// GetResourceMeta returns the meta data for the resource
 func (u *Upstream) GetResourceMeta(r string) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
 		"action":   "Upstream.GetResourceMeta",
@@ -136,6 +145,8 @@ func (u *Upstream) GetResourceMeta(r string) (map[string]string, error) {
 	}
 }
 
+// filterMeta filters the meta data for the resource to return
+// only the 402 configured fields
 func filterMeta(meta map[string]string) map[string]string {
 	l := log.WithFields(log.Fields{
 		"action": "filterMeta",
@@ -153,6 +164,8 @@ func filterMeta(meta map[string]string) map[string]string {
 	return filtered
 }
 
+// HeadResource makes a HEAD request to the upstream
+// and returns the meta data
 func (u *Upstream) HeadResource(r string) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
 		"action":   "Upstream.HeadResource",
@@ -203,6 +216,8 @@ func (u *Upstream) HeadResource(r string) (map[string]string, error) {
 	return headers, nil
 }
 
+// HMTLResource makes a GET request to the upstream
+// and returns the meta data from the body
 func (u *Upstream) HTMLResource(r string) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
 		"action":   "Upstream.HTMLResource",
@@ -271,6 +286,7 @@ func (u *Upstream) HTMLResource(r string) (map[string]string, error) {
 	return headers, nil
 }
 
+// PurgeCache purges the cache for the resource
 func (u *Upstream) PurgeCache(r string) error {
 	l := log.WithFields(log.Fields{
 		"action":   "Upstream.PurgeCache",
@@ -300,6 +316,7 @@ func (u *Upstream) PurgeCache(r string) error {
 	return nil
 }
 
+// HandlePurgeResource handles the PURGE request
 func HandlePurgeResource(w http.ResponseWriter, r *http.Request) {
 	l := log.WithFields(log.Fields{
 		"action": "HandlePurgeResource",

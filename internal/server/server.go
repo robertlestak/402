@@ -19,6 +19,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// apiPathPrefix joins the API prefix to the given path.
 func apiPathPrefix(p string) string {
 	pp := os.Getenv("API_PATH_PREFIX")
 	if pp == "" {
@@ -27,10 +28,15 @@ func apiPathPrefix(p string) string {
 	return path.Join(pp, p)
 }
 
+// wsError contains a JSON error message sent to the client.
 type wsError struct {
 	Error string `json:"error"`
 }
 
+// handlePaymentSocket handles a websocket connection
+// it is a monolith e2e function (should be refactored) that receives a transaction
+// from the client, validates the tx against the specified chain, and sends the
+// client their access token for succesful payment
 func handlePaymentSocket(conn *websocket.Conn) error {
 	l := log.WithFields(log.Fields{
 		"action": "handlePaymentSocket",
@@ -155,6 +161,7 @@ func handlePaymentSocket(conn *websocket.Conn) error {
 	return nil
 }
 
+// wsHandler is a http handler for websocket connections
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	l := log.WithFields(log.Fields{
 		"action": "wsHandler",
@@ -177,6 +184,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Server handles all http server requests
 func Server() error {
 	l := log.WithFields(log.Fields{
 		"action": "server",

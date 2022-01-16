@@ -19,12 +19,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type Customization struct {
-	JS    string `json:"js"`
-	CSS   string `json:"css"`
-	Image string `json:"image"`
-}
-
+// Meta is the primary struct for a 402 request
 type Meta struct {
 	Claims        jwt.MapClaims   `json:"claims"`
 	Exp           time.Duration   `json:"exp"`
@@ -32,15 +27,20 @@ type Meta struct {
 	Customization Customization   `json:"customization"`
 }
 
+// Customization contains data the upstream can provide to customize the payment page
+type Customization struct {
+	JS    string `json:"js"`
+	CSS   string `json:"css"`
+	Image string `json:"image"`
+}
+
+// Page is the template for the payment page
 type Page struct {
 	Meta  *Meta  `json:"meta"`
 	WSURL string `json:"ws_url"`
 }
 
-func keyID() string {
-	return os.Getenv("JWT_KEY_ID")
-}
-
+// Validate Claims validates the requested claims against any configured protected claims
 func ValidateClaims(claims jwt.MapClaims) error {
 	l := log.WithFields(log.Fields{
 		"action": "ValidateClaims",
@@ -54,6 +54,7 @@ func ValidateClaims(claims jwt.MapClaims) error {
 	return nil
 }
 
+// GenerateToken generates a JWT token for the provided payment request
 func (m *Meta) GenerateToken() (string, error) {
 	l := log.WithFields(log.Fields{
 		"action": "GenerateToken",
@@ -68,7 +69,7 @@ func (m *Meta) GenerateToken() (string, error) {
 		l.WithError(verr).Error("Failed to validate claims")
 		return "", verr
 	}
-	token, err := auth.GenerateJWT(m.Claims, exp, keyID())
+	token, err := auth.GenerateJWT(m.Claims, exp, utils.KeyID())
 	if err != nil {
 		l.Error(err)
 		return "", err
@@ -78,6 +79,7 @@ func (m *Meta) GenerateToken() (string, error) {
 	return token, nil
 }
 
+// parseMeta parses the provided map[string]string for any configured payment meta fields
 func parseMeta(h map[string]string) (*Meta, error) {
 	l := log.WithFields(log.Fields{
 		"action": "parseMeta",
@@ -113,6 +115,11 @@ func parseMeta(h map[string]string) (*Meta, error) {
 	return &metaObj, nil
 }
 
+// HandleRequest is a monolith function (should be refactored) that handles an e2e request
+// from a client. This will validate their current auth token (if provided) and if valid, will
+// return 200 indicating the user has access to the resource. If the token is invalid, it will
+// retrieve the upstream for the request, make a 402 head/meta request to retrieve the metadata,
+// encrypt this request with the provided key, and return the [402 to the cllient
 func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	l := log.WithFields(log.Fields{
 		"action": "HandleRequest",
@@ -198,7 +205,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to marshal meta", http.StatusInternalServerError)
 		return
 	}
-	em, err := auth.EncryptWithPublicKey(mjson, keyID())
+	em, err := auth.EncryptWithPublicKey(mjson, utils.KeyID())
 	if err != nil {
 		l.WithError(err).Error("Failed to encrypt meta")
 		http.Error(w, "Failed to encrypt meta", http.StatusInternalServerError)
@@ -218,6 +225,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	payment.TemplatedPage(w, pageData, "402.html")
 }
 
+// Decrypt decrypts the encrypted meta object
 func (m *Meta) Decrypt(encrypted string) error {
 	l := log.WithFields(log.Fields{
 		"action": "Decrypt",
@@ -249,6 +257,7 @@ func (m *Meta) Decrypt(encrypted string) error {
 	return nil
 }
 
+// ValidatePayment validates the payment request
 func (m *Meta) ValidatePayment() error {
 	l := log.WithFields(log.Fields{
 		"action": "ValidatePayment",
@@ -262,6 +271,12 @@ func (m *Meta) ValidatePayment() error {
 	return nil
 }
 
+// ValidateEncryptedPayment handles an untrusted payment request from a user. It will take the
+// encrypted meta resource from the user and decrypt it. It will then call the payment validation function
+// which will compare the encrypted metadata and its hash to prevent tampering, and then will validate the
+// txid provided against the requested network. Once the txid is validated, it will be checked to ensure that
+// it is to an address in the payment request and has not been recieved before. If all of these checks pass,
+// the payment request will be validated.
 func ValidateEncryptedPayment(txid string, network string, encrypted string, metaHash string) error {
 	l := log.WithFields(log.Fields{
 		"action":   "ValidateEncryptedPayment",

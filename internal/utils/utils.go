@@ -13,14 +13,18 @@ var (
 	}
 )
 
+// NetworkSupported returns true if the given network is supported
 func NetworkSupported(network string) bool {
 	return StringInSlice(network, supportedNetworks)
 }
 
+// HeaderPrefix returns the prefix for upstream configuration metadata
 func HeaderPrefix() string {
 	return "x-" + os.Getenv("HEADER_NAME_PREFIX") + "-"
 }
 
+// AuthToken returns the auth token from the request
+// iterating headers and cookies to find the token
 func AuthToken(r *http.Request) string {
 	for _, v := range r.Cookies() {
 		if v.Name == os.Getenv("HEADER_NAME_PREFIX")+"_token" {
@@ -38,6 +42,7 @@ func AuthToken(r *http.Request) string {
 	return token
 }
 
+// StringInSlice returns true if the given string is in the given slice
 func StringInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
@@ -47,6 +52,7 @@ func StringInSlice(a string, list []string) bool {
 	return false
 }
 
+// KeyID is a simple wrapper that returns the current active KeyID
 func KeyID() string {
 	return os.Getenv("JWT_KEY_ID")
 }
