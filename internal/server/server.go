@@ -184,6 +184,11 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleHealthcheck(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
 // Server handles all http server requests
 func Server() error {
 	l := log.WithFields(log.Fields{
@@ -200,6 +205,8 @@ func Server() error {
 	r.HandleFunc(apiPathPrefix("/"), hpay.HandleRequest).Methods("GET", "POST")
 
 	r.HandleFunc(apiPathPrefix("/ws"), wsHandler)
+
+	r.HandleFunc(apiPathPrefix("/status/healthz"), handleHealthcheck)
 
 	port := os.Getenv("PORT")
 	if port == "" {
