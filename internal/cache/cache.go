@@ -89,3 +89,34 @@ func Del(key string) error {
 	l.Debug("Deleted key from redis")
 	return nil
 }
+
+// Ping returns the redis ping
+func Ping() error {
+	l := log.WithFields(log.Fields{
+		"package": "cache",
+	})
+	l.Debug("Pinging redis")
+	cmd := Client.Ping()
+	if cmd.Err() != nil {
+		l.Error("Failed to ping redis")
+		return cmd.Err()
+	}
+	l.Debug("Pinged redis")
+	return nil
+}
+
+// Healthcheck returns the redis healthcheck
+func Healthcheck() {
+	l := log.WithFields(log.Fields{
+		"package": "cache",
+	})
+	l.Debug("Checking redis health")
+	for {
+		cmd := Client.Ping()
+		if cmd.Err() != nil {
+			l.WithError(cmd.Err()).Fatal("Redis healthcheck failed")
+		}
+		l.Debug("Pinged redis")
+		time.Sleep(time.Second * 5)
+	}
+}

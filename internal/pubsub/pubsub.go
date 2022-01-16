@@ -273,3 +273,34 @@ func ActiveJobsWorker(fx func(string, string, string, string) error) error {
 		time.Sleep(time.Second * 1)
 	}
 }
+
+// Ping returns the redis ping
+func Ping() error {
+	l := log.WithFields(log.Fields{
+		"package": "cache",
+	})
+	l.Debug("Pinging redis")
+	cmd := Client.Ping()
+	if cmd.Err() != nil {
+		l.Error("Failed to ping redis")
+		return cmd.Err()
+	}
+	l.Debug("Pinged redis")
+	return nil
+}
+
+// Healthcheck returns the redis healthcheck
+func Healthcheck() {
+	l := log.WithFields(log.Fields{
+		"package": "cache",
+	})
+	l.Debug("Checking redis health")
+	for {
+		cmd := Client.Ping()
+		if cmd.Err() != nil {
+			l.WithError(cmd.Err()).Fatal("Redis healthcheck failed")
+		}
+		l.Debug("Pinged redis")
+		time.Sleep(time.Second * 5)
+	}
+}

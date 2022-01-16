@@ -38,10 +38,12 @@ func init() {
 	if cerr := cache.Init(); cerr != nil {
 		l.WithError(cerr).Fatal("Failed to initialize cache")
 	}
+	go cache.Healthcheck()
 	if perr := pubsub.Init(); perr != nil {
 		l.WithError(perr).Fatal("Failed to initialize pubsub")
 	}
 	go pubsub.ActiveJobsWorker(hpay.ValidateEncryptedPayment)
+	go pubsub.Healthcheck()
 	derr := db.Init()
 	if derr != nil {
 		l.WithError(derr).Fatal("Failed to initialize database")
