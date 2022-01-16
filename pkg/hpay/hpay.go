@@ -188,7 +188,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	// loop through payment requests to create addrs if necessary
 	for _, pr := range meta.Payment.Requests {
 		// if site owner has not provided static address, create one
-		if pr.Address == "" {
+		if pr.Address == "" && os.Getenv("VAULT_ENABLE") == "true" {
 			newWallet, werr := vault.NewWallet()
 			if werr != nil {
 				l.WithError(werr).Error("Failed to create wallet")

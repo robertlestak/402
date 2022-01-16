@@ -55,7 +55,7 @@ data:
   upstreams.yaml: |
     - name: default
       method: http
-      endpoint: http://localhost:3000
+      endpoint: http://humun-cdn.humun-core.svc.cluster.local.
       selector:
         hosts:
         - "*"

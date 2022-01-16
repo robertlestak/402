@@ -17,10 +17,10 @@ import (
 // PaymentRequest contains a single network payment request
 type PaymentRequest struct {
 	gorm.Model
-	PaymentID uint   `gorm:"index"`
-	Amount    int64  `json:"amount"`
-	Network   string `json:"network"`
-	Address   string `json:"address"`
+	PaymentID uint    `gorm:"index"`
+	Amount    float64 `json:"amount"`
+	Network   string  `json:"network"`
+	Address   string  `json:"address"`
 }
 
 // Payment contains a payment for a request, including all the configured network payment requests
@@ -42,7 +42,7 @@ type Tx struct {
 	Hash     string
 	ToAddr   string
 	FromAddr string
-	Value    int64
+	Value    float64
 }
 
 // CreateMetaHash creates a hash of the payment meta data
@@ -229,14 +229,16 @@ func (p *Payment) Validate() error {
 		l.WithError(serr).Error("Failed to save payment")
 		return serr
 	}
-	wallet := &vault.Wallet{
-		Address: tx.ToAddr,
-		Network: p.Network,
-		Txid:    tx.Hash,
-	}
-	if err := wallet.AddTxData(); err != nil {
-		l.WithError(err).Error("Failed to add tx data")
-		return err
+	if os.Getenv("VAULT_ENABLE") == "true" {
+		wallet := &vault.Wallet{
+			Address: tx.ToAddr,
+			Network: p.Network,
+			Txid:    tx.Hash,
+		}
+		if err := wallet.AddTxData(); err != nil {
+			l.WithError(err).Error("Failed to add tx data")
+			return err
+		}
 	}
 	return nil
 }

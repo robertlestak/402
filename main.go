@@ -49,9 +49,11 @@ func init() {
 	go db.Healthchecker()
 	db.DB.AutoMigrate(&payment.Payment{})
 	db.DB.AutoMigrate(&payment.PaymentRequest{})
-	_, verr := vault.NewClient()
-	if verr != nil {
-		l.WithError(verr).Fatal("Failed to initialize vault")
+	if os.Getenv("VAULT_ENABLE") == "true" {
+		_, verr := vault.NewClient()
+		if verr != nil {
+			l.WithError(verr).Fatal("Failed to initialize vault")
+		}
 	}
 	l.Info("end")
 }
