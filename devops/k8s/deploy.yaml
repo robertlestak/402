@@ -54,7 +54,7 @@ metadata:
 data:
   upstreams.yaml: |
     - name: default
-      method: http
+      method: html
       endpoint: http://humun-cdn.humun-core.svc.cluster.local.
       selector:
         hosts:
