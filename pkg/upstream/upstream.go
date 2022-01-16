@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/robertlestak/hpay/internal/cache"
 	"github.com/robertlestak/hpay/internal/utils"
 	"github.com/robertlestak/hpay/pkg/auth"
@@ -128,11 +129,28 @@ func (u *Upstream) GetResourceMeta(r string) (map[string]string, error) {
 	case MethodHTTP:
 		return u.HeadResource(r)
 	case MethodHTML:
-		return nil, nil
+		return u.HTMLResource(r)
 	default:
 		l.Errorf("Unknown method: %s", *u.Method)
 		return nil, errors.New("unknown method")
 	}
+}
+
+func filterMeta(meta map[string]string) map[string]string {
+	l := log.WithFields(log.Fields{
+		"action": "filterMeta",
+	})
+	l.Debug("start")
+	filtered := make(map[string]string)
+	for k, v := range meta {
+		lk := strings.ToLower(k)
+		lp := strings.ToLower(utils.HeaderPrefix())
+		if strings.HasPrefix(lk, lp) {
+			filtered[lk] = v
+		}
+	}
+	l.Debug("end")
+	return filtered
 }
 
 func (u *Upstream) HeadResource(r string) (map[string]string, error) {
@@ -175,6 +193,75 @@ func (u *Upstream) HeadResource(r string) (map[string]string, error) {
 	for k, v := range resp.Header {
 		headers[strings.ToLower(k)] = v[0]
 	}
+	headers = filterMeta(headers)
+	cacheData, err := json.Marshal(headers)
+	if err != nil {
+		l.Errorf("Marshal: %v", err)
+		return nil, err
+	}
+	cache.Set(up, string(cacheData), cache.DefaultExpiration)
+	return headers, nil
+}
+
+func (u *Upstream) HTMLResource(r string) (map[string]string, error) {
+	l := log.WithFields(log.Fields{
+		"action":   "Upstream.HTMLResource",
+		"resource": r,
+	})
+	l.Debug("start")
+	ep := *u.Endpoint
+	up := ep + r
+	var cacheDataStr string
+	var cerr error
+	headers := make(map[string]string)
+	if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" {
+		l.WithField("cache", "miss").Debug("Cache miss")
+	} else {
+		l.WithField("cache", "hit").Debug("Cache hit")
+		cerr = json.Unmarshal([]byte(cacheDataStr), &headers)
+		if cerr != nil {
+			l.Errorf("Unmarshal: %v", cerr)
+			return nil, cerr
+		}
+		l.WithField("headers", headers).Debug("Headers from cache")
+		l.Debug("end")
+		return headers, nil
+	}
+	req, err := http.NewRequest("GET", up, nil)
+	if err != nil {
+		l.Errorf("NewRequest: %v", err)
+		return nil, err
+	}
+	c := &http.Client{}
+	resp, err := c.Do(req)
+	if err != nil {
+		l.Errorf("Do: %v", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+	defer l.Debug("end")
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		l.Errorf("NewDocumentFromReader: %v", err)
+		return nil, err
+	}
+	doc.Find("meta").Each(func(i int, s *goquery.Selection) {
+		var key string
+		var val string
+		var ok bool
+		if key, ok = s.Attr("name"); !ok {
+			l.Debug("No name attribute")
+			return
+		}
+		if val, ok = s.Attr("content"); !ok {
+			l.Debug("No content attribute")
+			return
+		}
+		if key != "" && val != "" {
+			headers[key] = val
+		}
+	})
+	headers = filterMeta(headers)
 	cacheData, err := json.Marshal(headers)
 	if err != nil {
 		l.Errorf("Marshal: %v", err)

@@ -119,7 +119,7 @@ func WriteSecretWithFreshToken(p string, sec map[string]interface{}) error {
 }
 
 func ListSecrets(p string) ([]string, error) {
-	if Client == nil || Client == nil {
+	if Client == nil {
 		return nil, errors.New("vault client not initialized")
 	}
 	log.Printf("vault.ListSecrets(%+v)\n", p)

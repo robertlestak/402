@@ -40,6 +40,16 @@ Server can enable hpay on an endpoint by sending the following headers. hpay wil
 `x-402-required: [Boolean]`
 `x-402-request: [String Base64 JSON]`
 
+### HTML
+
+Serverless / static sites can enable hpay on a resource by setting `<meta>` tags in the `HTML` content (preferrably in the `<head>`).
+
+#### Meta Tags
+
+```html
+<meta name="x-402-required" content="[Boolean]">
+<meta name="x-402-request" content="[String Base64 JSON]">
+```
 
 ## Encrypted Checksum
 
