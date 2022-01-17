@@ -33,7 +33,7 @@ An optional but recommended feature, HashiCorp Vault enables secure key manageme
 - `x-402-required`: `Boolean`
     - Set this field to true to indicate payment is required on this endpoint. As the `402` spec becomes more widedly adopted we hope to be able to phase this out in exchange for a more semantic response of `HTTP 402`.
 - `x-402-request`: `String Base64 JSON`
-    - This is the full payment request metadata. It is a base64 encoded stringified JSON `Meta` object. This must include the enabled networks, desired amount on each network, and the claims payment will grant. 
+    - This is the full payment request metadata. It is a base64 encoded stringified JSON `Meta` object. This must include the enabled networks, desired amount on each network, and the claims payment will grant. By default, tokens have no expiry, however an optional `exp` field that will set the token expiry to `exp` nanoseconds from the time of issuance.
 
 We plan to extend the spec in the future to make more use of the `x-402` namespace.
 
