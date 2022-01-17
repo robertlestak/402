@@ -1,0 +1,496 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hpay-swagger-v1
+  namespace: humun-client-svcs
+data:
+  swagger.yaml: |
+    swagger: "2.0"
+    info:
+      description: "RFC 7231 reserves the HTTP 402 status code \"for future use\". That future is now."
+      version: "0.0.1"
+      title: "402"
+      contact:
+        email: "hello@humun.us"
+        url: "https://402.sh"
+    host: "api.402.sh"
+    basePath: "/v1/_402"
+    #host: "localhost"
+    #basePath: "/"
+    schemes:
+    - "https"
+    #- http
+    paths:
+      /:
+        get:
+          tags:
+          - "auth"
+          summary: "Handle 402 request"
+          description: ""
+          operationId: "402.HandleRequest"
+          security:
+          - Bearer: []
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: "query"
+            name: "resource"
+            type: string
+          responses:
+            "200":
+              description: "OK"
+            "402":
+              description: "Payment Required"
+              
+        post:
+          tags:
+          - "auth"
+          summary: "Handle 402 request"
+          description: ""
+          operationId: "402.HandleRequestPost"
+          security:
+          - Bearer: []
+          consumes:
+          - "multipart/form-data"
+          produces:
+          - "application/json"
+          parameters:
+          - in: "formData"
+            name: "resource"
+            type: string
+          responses:
+            "200":
+              description: "OK"
+            "402":
+              description: "Payment Required"
+              
+        delete:
+          tags:
+          - "auth"
+          summary: "Purge the 402 header cache for a resource."
+          description: "NOTE: Swagger does not currently support the PURGE operation. This should be issued as PURGE."
+          operationId: "402.HandleRequestPurge"
+          security:
+          - Bearer: []
+          consumes:
+          - "multipart/form-data"
+          produces:
+          - "application/json"
+          parameters:
+          - in: "query"
+            name: "resource"
+            type: string
+          responses:
+            "200":
+              description: "OK"
+            "401":
+              description: "Unauthorized"
+    
+    
+    
+      /tokens/jwks:
+        get:
+          tags:
+          - "auth"
+          summary: "Get JWKS"
+          description: ""
+          operationId: "auth.HandleCreateJWKS"
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                type: object
+            "400":
+              description: "Invalid input"
+              
+      /tokens/valid:
+        get:
+          tags:
+          - "auth"
+          summary: "Validate caller auth token"
+          description: ""
+          operationId: "auth.HandleValidateJWT"
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: "header"
+            name: "x-402-token"
+            type: string
+          - in: "header"
+            name: Authorization
+            type: string
+          - in: header
+            type: string
+            name: Cookie=x-402-token
+          responses:
+            "200":
+              description: "OK"
+            "401":
+              description: "Invalid input"
+    
+
+      /payments/{network}/{txid}:
+        get:
+          tags:
+          - "payments"
+          summary: "Get a payment"
+          description: ""
+          operationId: "payment.HandleGetPaymentByTenant"
+          security:
+          - Bearer: []
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: "path"
+            name: "network"
+            type: string
+            required: true
+          - in: path
+            name: txid
+            type: string
+            required: true
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                $ref: "#/definitions/Payment"
+            "400":
+              description: "Bad Request"
+            "401":
+              description: "Unauthorized"
+      
+      /payments:
+        get:
+          tags:
+          - "payments"
+          summary: "Get configured upstreams"
+          description: ""
+          operationId: "payment.HandleListPaymentsForTenant"
+          security:
+          - Bearer: []
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: header
+            name: x-402-tenant
+            type: string
+          - in: "query"
+            name: "page"
+            type: integer
+            default: 1
+            minimum: 1
+          - in: query
+            name: pageSize
+            type: integer
+            default: 10
+            maximum: 100
+            minimum: 0
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                type: array
+                items:
+                  $ref: "#/definitions/Payment"
+            "400":
+              description: "Bad Request"
+            "401":
+              description: "Unauthorized"
+              
+      /ws:
+        post:
+          tags:
+          - "payments"
+          summary: "Payment handling websocket"
+          description: ""
+          operationId: "wsHandler"
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: "query"
+            name: "resource"
+            type: string
+          responses:
+            "200":
+              description: "OK"
+            "402":
+              description: "Payment Required"
+    
+      /upstreams:
+        post:
+          tags:
+          - "upstreams"
+          summary: "Create / update an upstream"
+          description: ""
+          operationId: "upstream.HandleUpdateUpstream"
+          security:
+          - Bearer: []
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: "body"
+            name: "body"
+            schema:
+              $ref: "#/definitions/Upstream"
+          responses:
+            "200":
+              description: "OK"
+            "400":
+              description: "Bad Request"
+            "401":
+              description: "Unauthorized"
+        get:
+          tags:
+          - "upstreams"
+          summary: "Get configured upstreams"
+          description: ""
+          operationId: "upstream.HandleListUpstreamsForTenant"
+          security:
+          - Bearer: []
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: header
+            name: x-402-tenant
+            type: string
+          - in: "query"
+            name: "page"
+            type: integer
+            default: 1
+            minimum: 1
+          - in: query
+            name: pageSize
+            type: integer
+            default: 10
+            maximum: 100
+            minimum: 0
+          responses:
+            "200":
+              description: "OK"
+            "400":
+              description: "Bad Request"
+            "401":
+              description: "Unauthorized"
+        delete:
+          tags:
+          - "upstreams"
+          summary: "Get configured upstreams"
+          description: ""
+          operationId: "upstream.HandleDeleteUpstreamForTenant"
+          security:
+          - Bearer: []
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: "body"
+            name: "body"
+            schema:
+              $ref: "#/definitions/Upstream"
+          responses:
+            "200":
+              description: "OK"
+            "400":
+              description: "Bad Request"
+            "401":
+              description: "Unauthorized"
+              
+              
+      /wallets/list:
+        get:
+          tags:
+          - "wallets"
+          summary: "List current addresses in hot wallet"
+          description: ""
+          operationId: "vault.HandleListWalletsForTenant"
+          security:
+          - Bearer: []
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: header
+            name: x-402-tenant
+            type: string
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                type: array
+                items:
+                  type: string
+            "400":
+              description: "Bad Request"
+            "401":
+              description: "Unauthorized"
+      
+      /wallets/get:
+        post:
+          tags:
+          - "wallets"
+          summary: "Get specified wallets from hot wallet"
+          description: ""
+          operationId: "vault.HandleGetWalletsForTenant"
+          security:
+          - Bearer: []
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: header
+            name: x-402-tenant
+            type: string
+          - in: body
+            name: body
+            schema:
+              type: array
+              items:
+                type: string
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                type: array
+                items:
+                  $ref: "#/definitions/Wallet"
+            "400":
+              description: "Bad Request"
+            "401":
+              description: "Unauthorized"
+      
+      /wallets/{address}:
+        delete:
+          tags:
+          - "wallets"
+          summary: "Delete specified wallet"
+          description: ""
+          operationId: "vault.HandleDeleteSecretForTenant"
+          security:
+          - Bearer: []
+          consumes:
+          - "application/json"
+          produces:
+          - "application/json"
+          parameters:
+          - in: header
+            name: x-402-tenant
+            type: string
+          - in: path
+            name: address
+            type: string
+            required: true
+          responses:
+            "200":
+              description: "OK"
+            "400":
+              description: "Bad Request"
+            "401":
+              description: "Unauthorized"
+              
+      /status/healthz:
+        get:
+          tags:
+          - "operations"
+          summary: "Status check"
+          description: ""
+          operationId: "handleHealthcheck"
+          responses:
+            "200":
+              description: "OK"
+            "500":
+              description: "Internal Server Error"
+            
+        
+
+    definitions:
+      Payment:
+        type: object
+        properties:
+          txid:
+            type: string
+          network:
+            type: string
+          tenant:
+            type: string
+          requests:
+            type: array
+            items:
+              type: object
+              properties:
+                amount:
+                  type: number
+                network:
+                  type: string
+                address:
+                  type: string
+      Upstream:
+        type: object
+        properties:
+          tenant:
+            type: string
+          name:
+            type: string
+          endpoint:
+            type: string
+          method:
+            type: string
+            enum: [http, html]
+          selector:
+            type: object
+            properties:
+              hosts:
+                type: array
+                items:
+                  type: string
+              paths:
+                type: array
+                items:
+                  type: string
+              headers:
+                type: object
+      Wallet:
+        type: object
+        properties:
+          type:
+            type: string
+          address:
+            type: string
+          public_key:
+            type: string
+          private_key:
+            type: string
+          txid:
+            type: string
+          network:
+            type: string
+          tenant:
+            type: string
+
+
+    securityDefinitions:
+      Bearer:
+        type: apiKey
+        name: Authorization
+        in: header

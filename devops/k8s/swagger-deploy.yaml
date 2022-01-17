@@ -1,0 +1,73 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpay-swagger-v1
+  namespace: humun-client-svcs
+  labels:
+    app: hpay-swagger
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hpay-swagger
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: hpay-swagger
+        version: v1
+    spec:
+      volumes:
+      - name: swagger
+        configMap:
+          name: hpay-swagger-v1
+      containers:
+      - name: swagger
+        image: swaggerapi/swagger-ui:v3.27.0
+        resources:
+          limits:
+            memory: 50Mi
+            cpu: 20m
+          requests:
+            memory: 50Mi
+            cpu: 20m
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - mountPath: "/opt/conf"
+          name: swagger
+        env:
+          - name: SWAGGER_JSON
+            value: /opt/conf/swagger.yaml
+          #- name: DOC_EXPANSION
+          #  value: "none"
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 20
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hpay-swagger
+  namespace: humun-client-svcs
+  labels:
+    app: hpay-swagger
+spec:
+  type: ClusterIP
+  selector:
+    app: hpay-swagger
+  ports:
+  - protocol: TCP
+    port: 8080
+    name: http
+    targetPort: 8080

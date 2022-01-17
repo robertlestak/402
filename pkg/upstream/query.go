@@ -87,3 +87,52 @@ func HandleListUpstreamsForTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func (u *Upstream) Delete() error {
+	l := log.WithFields(log.Fields{
+		"action":   "Delete",
+		"upstream": u,
+	})
+	l.Debug("start")
+	return db.DB.Where("name = ? and tenant = ?", u.Name, u.Tenant).Delete(u).Error
+}
+
+func HandleDeleteUpstreamForTenant(w http.ResponseWriter, r *http.Request) {
+	l := log.WithFields(log.Fields{
+		"action":  "HandleDeleteUpstreamForTenant",
+		"request": r,
+	})
+	l.Debug("start")
+	up := &Upstream{}
+	defer l.Debug("end")
+	defer r.Body.Close()
+	if err := json.NewDecoder(r.Body).Decode(up); err != nil {
+		l.Errorf("json.NewDecoder: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	l.WithField("upstream", up).Debug("Upstream")
+	if err := up.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	token := utils.AuthToken(r)
+	if token == "" {
+		l.Error("No auth token")
+		http.Error(w, "No auth token", http.StatusUnauthorized)
+		return
+	}
+	// set to false if we are relying on middleware to validate tokens
+	validateToken := true
+	if !auth.TokenOwnsTenant(token, *up.Tenant, validateToken) {
+		l.Error("Not owner")
+		http.Error(w, "Not owner", http.StatusUnauthorized)
+		return
+	}
+	if err := up.Delete(); err != nil {
+		l.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

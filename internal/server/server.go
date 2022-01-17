@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/robertlestak/hpay/pkg/auth"
@@ -21,7 +22,7 @@ func apiPathPrefix(p string) string {
 	if pp == "" {
 		pp = "/"
 	}
-	return path.Join(pp, p)
+	return strings.ReplaceAll(path.Join(pp, p), "//", "/")
 }
 
 func handleHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +42,7 @@ func Server() error {
 	r.HandleFunc(apiPathPrefix("/tokens/valid"), auth.HandleValidateJWT).Methods("GET")
 	r.HandleFunc(apiPathPrefix("/upstreams"), upstream.HandleUpdateUpstream).Methods("POST")
 	r.HandleFunc(apiPathPrefix("/upstreams"), upstream.HandleListUpstreamsForTenant).Methods("GET")
+	r.HandleFunc(apiPathPrefix("/upstreams"), upstream.HandleDeleteUpstreamForTenant).Methods("DELETE")
 	r.HandleFunc(apiPathPrefix("/wallets/list"), vault.HandleListWalletsForTenant).Methods("GET")
 	r.HandleFunc(apiPathPrefix("/wallets/get"), vault.HandleGetWalletsForTenant).Methods("POST")
 	r.HandleFunc(apiPathPrefix("/wallets/{address}"), vault.HandleDeleteSecretForTenant).Methods("DELETE")

@@ -12,7 +12,9 @@ spec:
   http:
   - match:
     - uri:
-        prefix: "/"
+        prefix: "/v1/"
+    rewrite:
+      uri: "/v1/"
     route:
     - destination:
         host: hpay

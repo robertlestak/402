@@ -489,7 +489,7 @@ func HandleUpdateUpstream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// set to false if we are relying on middleware to validate tokens
-	validateToken := false
+	validateToken := true
 	if !auth.TokenOwnsTenant(token, *up.Tenant, validateToken) {
 		l.Error("Not owner")
 		http.Error(w, "Not owner", http.StatusUnauthorized)
