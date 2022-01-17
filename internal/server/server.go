@@ -16,6 +16,7 @@ import (
 	"github.com/robertlestak/hpay/pkg/hpay"
 	"github.com/robertlestak/hpay/pkg/payment"
 	"github.com/robertlestak/hpay/pkg/upstream"
+	"github.com/rs/cors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -212,6 +213,13 @@ func Server() error {
 	if port == "" {
 		port = "8080"
 	}
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedHeaders:   []string{"*"},
+		AllowCredentials: true,
+		Debug:            true,
+	})
+	h := c.Handler(r)
 	l.Infof("Listening on port %s", port)
-	return http.ListenAndServe(":"+port, r)
+	return http.ListenAndServe(":"+port, h)
 }
