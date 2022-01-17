@@ -30,7 +30,7 @@ func handlePaymentSocket(conn *websocket.Conn) error {
 		"action": "handlePaymentSocket",
 	})
 	l.Info("start")
-	payment := payment.Payment{}
+	payment := &payment.Payment{}
 	err := conn.ReadJSON(&payment)
 	if err != nil {
 		l.Println("read:", err)

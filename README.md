@@ -65,6 +65,11 @@ We plan to extend the spec in the future to make more use of the `x-402` namespa
 }
 ```
 
+### Resource Claims
+
+`402` operates an a claims-based identity model. Servers / sites / resources can specify claims are broad or as granular as desired.
+
+
 ## Upstream Configuration
 
 Upstreams are configured in the database and are automatically refreshed at a regular interval. Each endpoint must specify a unique combination of selectors that inbound requests will be matched against. If there is only one upstream configured, or no upstreams match the selectors, it is assumed to use the initial / default upstream.

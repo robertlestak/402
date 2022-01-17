@@ -21,10 +21,10 @@ import (
 
 // Meta is the primary struct for a 402 request
 type Meta struct {
-	Claims        jwt.MapClaims   `json:"claims"`
-	Exp           time.Duration   `json:"exp"`
-	Payment       payment.Payment `json:"payment"`
-	Customization Customization   `json:"customization"`
+	Claims        jwt.MapClaims    `json:"claims"`
+	Exp           time.Duration    `json:"exp"`
+	Payment       *payment.Payment `json:"payment"`
+	Customization Customization    `json:"customization"`
 }
 
 // Customization contains data the upstream can provide to customize the payment page
@@ -70,6 +70,9 @@ func (m *Meta) GenerateToken() (string, error) {
 	if verr := ValidateRequestedClaims(m.Claims); verr != nil {
 		l.WithError(verr).Error("Failed to validate claims")
 		return "", verr
+	}
+	if m.Payment.Tenant != "" {
+		m.Claims["iss"] = m.Payment.Tenant
 	}
 	token, err := auth.GenerateJWT(m.Claims, exp, utils.KeyID())
 	if err != nil {

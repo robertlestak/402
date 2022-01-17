@@ -125,7 +125,9 @@ func GenerateJWT(claims map[string]interface{}, exp time.Time, keyID string) (st
 		c["aud"] = os.Getenv("JWT_AUD")
 	}
 	c["iat"] = time.Now().Unix()
-	c["iss"] = os.Getenv("JWT_ISS")
+	if _, ok := c["iss"]; !ok {
+		c["iss"] = os.Getenv("JWT_ISS")
+	}
 	tokenString, err := token.SignedString(SignKeys[keyID])
 	if err != nil {
 		l.Errorf("failed to sign token: %s", err)
