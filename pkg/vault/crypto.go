@@ -309,8 +309,7 @@ func HandleGetWalletsForTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no token", http.StatusUnauthorized)
 		return
 	}
-	verify := true
-	if !auth.TokenOwnsTenant(token, tenant, verify) {
+	if !auth.TokenOwnsTenant(token, tenant) {
 		l.Error("token does not own tenant")
 		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
 		return
@@ -350,8 +349,7 @@ func HandleListWalletsForTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no token", http.StatusUnauthorized)
 		return
 	}
-	verify := true
-	if !auth.TokenOwnsTenant(token, tenant, verify) {
+	if !auth.TokenOwnsTenant(token, tenant) {
 		l.Error("token does not own tenant")
 		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
 		return
@@ -404,8 +402,7 @@ func HandleDeleteSecretForTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no token", http.StatusUnauthorized)
 		return
 	}
-	verify := true
-	if !auth.TokenOwnsTenant(token, tenant, verify) {
+	if !auth.TokenOwnsTenant(token, tenant) {
 		l.Error("token does not own tenant")
 		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
 		return

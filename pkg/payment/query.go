@@ -57,8 +57,7 @@ func HandleGetPaymentByTenant(w http.ResponseWriter, r *http.Request) {
 		l.Info("tenant is empty")
 		tenant = os.Getenv("DEFAULT_TENANT")
 	}
-	verified := true
-	if !auth.TokenOwnsTenant(token, tenant, verified) {
+	if !auth.TokenOwnsTenant(token, tenant) {
 		l.Error("token does not own tenant")
 		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
 		return
@@ -136,8 +135,7 @@ func HandleListPaymentsForTenant(w http.ResponseWriter, r *http.Request) {
 		l.Info("tenant is empty")
 		tenant = os.Getenv("DEFAULT_TENANT")
 	}
-	verified := true
-	if !auth.TokenOwnsTenant(token, tenant, verified) {
+	if !auth.TokenOwnsTenant(token, tenant) {
 		l.Error("token does not own tenant")
 		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
 		return

@@ -308,10 +308,12 @@ func HandleValidateJWT(w http.ResponseWriter, r *http.Request) {
 // in the sub claim. If the token is root, it returns true. If verified is false,
 // it will not verify the token before checking the sub claim. This is useful when running
 // behind validating middleware where we may not have the signing keys but we trust our infra.
-func TokenOwnsTenant(token string, tenant string, verified bool) bool {
+func TokenOwnsTenant(token string, tenant string) bool {
+	withService := os.Getenv("TOKEN_VALIDATE_WITH_SERVICE")
 	l := log.WithFields(log.Fields{
-		"func":   "TokenOwnsTenant",
-		"tenant": tenant,
+		"func":        "TokenOwnsTenant",
+		"tenant":      tenant,
+		"withService": withService,
 	})
 	l.Println("start")
 	if TokenIsRoot(token) {
@@ -320,8 +322,8 @@ func TokenOwnsTenant(token string, tenant string, verified bool) bool {
 	}
 	var claims jwt.MapClaims
 	var err error
-	if verified {
-		_, claims, err = ValidateJWT(token)
+	if withService == "true" {
+		_, claims, err = ValidateJWTWithService(token)
 	} else {
 		_, claims, err = ParseClaimsUnverified(token)
 	}
@@ -337,4 +339,41 @@ func TokenOwnsTenant(token string, tenant string, verified bool) bool {
 	}
 	l.Debug("end")
 	return false
+}
+
+func ValidateJWTWithService(idtoken string) (*jwt.Token, jwt.MapClaims, error) {
+	l := log.WithFields(log.Fields{
+		"method": "ValidateJWTWithService",
+	})
+	l.Info("ValidateJWTWithService")
+	req, rerr := http.NewRequest("POST", os.Getenv("TOKEN_VALIDATION_API"), nil)
+	if rerr != nil {
+		l.Errorf("http.NewRequest: %v", rerr)
+		return nil, nil, rerr
+	}
+	hc := &http.Client{}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+idtoken)
+	res, rerr := hc.Do(req)
+	if rerr != nil {
+		l.Errorf("hc.Do: %v", rerr)
+		return nil, nil, rerr
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		l.Errorf("res.StatusCode != 200. StatusCode=%d", res.StatusCode)
+		return nil, nil, errors.New(http.StatusText(http.StatusUnauthorized))
+	} else {
+		token, claims, err := ParseClaimsUnverified(idtoken)
+		if err != nil {
+			l.Errorf("auth.ParseClaimsUnverified: %v", err)
+			return nil, nil, err
+		}
+		// the live /valid request above returns a 200 if token is valid
+		// the ParseClaimsUnverified above returns a token and claims
+		// together, with the istio auth, we can confirm that the token provided is valid
+		token.Valid = true
+		l.Infof("auth.ParseClaimsUnverified: %v", claims)
+		return token, claims, nil
+	}
 }

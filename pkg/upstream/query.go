@@ -40,8 +40,7 @@ func HandleListUpstreamsForTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "token is empty", http.StatusUnauthorized)
 		return
 	}
-	verified := true
-	if !auth.TokenOwnsTenant(token, tenant, verified) {
+	if !auth.TokenOwnsTenant(token, tenant) {
 		l.Error("token does not own tenant")
 		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
 		return
@@ -122,9 +121,7 @@ func HandleDeleteUpstreamForTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No auth token", http.StatusUnauthorized)
 		return
 	}
-	// set to false if we are relying on middleware to validate tokens
-	validateToken := true
-	if !auth.TokenOwnsTenant(token, *up.Tenant, validateToken) {
+	if !auth.TokenOwnsTenant(token, *up.Tenant) {
 		l.Error("Not owner")
 		http.Error(w, "Not owner", http.StatusUnauthorized)
 		return
