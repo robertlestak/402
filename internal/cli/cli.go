@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/robertlestak/hpay/pkg/auth"
+	"github.com/robertlestak/hpay/pkg/vault"
 )
 
 // Cli is the entrypoint func for cli operations
@@ -20,8 +21,13 @@ func Cli() error {
 		} else {
 			fmt.Println(t)
 		}
+	case "vault":
+		if err := vault.Cli(); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unknown action: %s", os.Args[2])
 	}
+	os.Exit(0)
 	return nil
 }

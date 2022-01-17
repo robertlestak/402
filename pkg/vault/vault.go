@@ -99,6 +99,31 @@ func GetSecretWithFreshToken(p string) (map[string]interface{}, error) {
 	return data, nil
 }
 
+// GetSecretRawWithFreshToken gets a secret from vault with a fresh token
+func GetSecretRawWithFreshToken(p string) (map[string]interface{}, error) {
+	l := log.WithFields(log.Fields{
+		"action": "GetSecretRawWithFreshToken",
+		"path":   p,
+	})
+	l.Info("GetSecretRawWithFreshToken")
+	_, err := GetToken()
+	if err != nil {
+		return nil, err
+	}
+	var sec map[string]interface{}
+
+	pp := strings.Split(p, "/")
+	pp = insertSliceString(pp, 1, "data")
+	rp := strings.Join(pp, "/")
+	l = l.WithField("rp", rp)
+	l.Info("GetSecretRawWithFreshToken")
+	secret, err := Client.Logical().Read(rp)
+	if err != nil {
+		return sec, err
+	}
+	return secret.Data, nil
+}
+
 // WriteSecretWithFreshToken writes a secret to vault with a fresh token
 func WriteSecretWithFreshToken(p string, sec map[string]interface{}) error {
 	l := log.WithFields(log.Fields{
@@ -134,9 +159,6 @@ func ListSecrets(p string) ([]string, error) {
 		return nil, errors.New("secret path required")
 	}
 	pp := strings.Split(p, "/")
-	if len(pp) < 2 {
-		return nil, errors.New("secret path must be in kv/path/to/secret format")
-	}
 	pp = insertSliceString(pp, 1, "metadata")
 	p = strings.Join(pp, "/")
 	secret, err := Client.Logical().List(p + "/")
@@ -169,4 +191,30 @@ func ListSecretsRetry(p string) ([]string, error) {
 		}
 	}
 	return keys, err
+}
+
+// DeleteSecret deletes a secret from path p
+func DeleteSecret(p string) error {
+	l := log.WithFields(log.Fields{
+		"path": p,
+	})
+	l.Printf("vault.DeleteSecret(%+v)", p)
+	if p == "" {
+		l.Printf("vault.DeleteSecret(%+v) error: %v", p, errors.New("secret path required"))
+		return errors.New("secret path required")
+	}
+	pp := strings.Split(p, "/")
+	if len(pp) < 2 {
+		l.Printf("vault.DeleteSecret(%+v) error: %v", p, errors.New("secret path must be in kv/path/to/secret format"))
+		return errors.New("secret path must be in kv/path/to/secret format")
+	}
+	pp = insertSliceString(pp, 1, "metadata")
+	p = strings.Join(pp, "/")
+	_, err := Client.Logical().Delete(p)
+	if err != nil {
+		l.Printf("vault.Delete(%+v) error: %v\n", p, err)
+		return err
+	}
+	l.Printf("vault.Delete(%+v) success\n", p)
+	return nil
 }

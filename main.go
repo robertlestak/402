@@ -38,17 +38,13 @@ func init() {
 	if cerr := cache.Init(); cerr != nil {
 		l.WithError(cerr).Fatal("Failed to initialize cache")
 	}
-	go cache.Healthcheck()
 	if perr := pubsub.Init(); perr != nil {
 		l.WithError(perr).Fatal("Failed to initialize pubsub")
 	}
-	go pubsub.ActiveJobsWorker(hpay.ValidateEncryptedPayment)
-	go pubsub.Healthcheck()
 	derr := db.Init()
 	if derr != nil {
 		l.WithError(derr).Fatal("Failed to initialize database")
 	}
-	go db.Healthchecker()
 	db.DB.AutoMigrate(&payment.Payment{})
 	db.DB.AutoMigrate(&payment.PaymentRequest{})
 	if os.Getenv("VAULT_ENABLE") == "true" {
@@ -56,8 +52,18 @@ func init() {
 		if verr != nil {
 			l.WithError(verr).Fatal("Failed to initialize vault")
 		}
+		if os.Getenv("VAULT_CLEANUP_ENABLE") == "true" {
+			go vault.Cleaner()
+		}
 	}
 	l.Info("end")
+}
+
+func serverUtils() {
+	go cache.Healthcheck()
+	go pubsub.ActiveJobsWorker(hpay.ValidateEncryptedPayment)
+	go pubsub.Healthcheck()
+	go db.Healthchecker()
 }
 
 func main() {
@@ -70,6 +76,7 @@ func main() {
 	}
 	switch os.Args[1] {
 	case "server":
+		serverUtils()
 		if err := server.Server(); err != nil {
 			l.WithError(err).Fatal("Failed to start server")
 		}

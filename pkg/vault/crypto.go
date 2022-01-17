@@ -81,6 +81,26 @@ func (w *Wallet) WriteVault() error {
 	return nil
 }
 
+func (w *Wallet) ParseMap(sec map[string]interface{}) error {
+	l := log.WithFields(log.Fields{
+		"action": "ParseMap",
+		"type":   w.Type,
+	})
+	l.Info("ParseMap")
+	w.Type = sec["type"].(string)
+	w.Address = sec["address"].(string)
+	w.PublicKey = sec["public_key"].(string)
+	w.PrivateKey = sec["private_key"].(string)
+	if txid, ok := sec["txid"]; ok {
+		w.Txid = txid.(string)
+	}
+	if network, ok := sec["network"]; ok {
+		w.Network = network.(string)
+	}
+	l.Info("ParseMap parsed")
+	return nil
+}
+
 // GetByAddress gets wallet data from Vault by address
 // this should only be called by trusted code as it will return private keys in plain text
 func (w *Wallet) GetByAddress() error {
@@ -95,15 +115,9 @@ func (w *Wallet) GetByAddress() error {
 		l.Error(err)
 		return err
 	}
-	w.Type = sec["type"].(string)
-	w.Address = sec["address"].(string)
-	w.PublicKey = sec["public_key"].(string)
-	w.PrivateKey = sec["private_key"].(string)
-	if txid, ok := sec["txid"]; ok {
-		w.Txid = txid.(string)
-	}
-	if network, ok := sec["network"]; ok {
-		w.Network = network.(string)
+	if w.ParseMap(sec) != nil {
+		l.Error(err)
+		return err
 	}
 	l.Info("GetByAddress retrieved")
 	return nil

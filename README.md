@@ -113,4 +113,4 @@ If Vault is enabled, upstream sites can omit the `address` from the payment requ
 
 When a payment is completed, `402` will update Value to add the `txid` and `network` to the address for easier accounting (as well as tracking the tx data in the database). Site owners can then retrieve the private keys from Vault as needed.
 
-Future feature additions will include pooled re-usable receive addresses, and un-used address cleanup.
+Future feature additions will include pooled re-usable receive addresses.
