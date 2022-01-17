@@ -79,7 +79,7 @@ spec:
                 {
                   [":method"] = "GET",
                   [":authority"] = request_handle:headers():get(":authority"),
-                  [":path"] = "/_402?resource="..path,
+                  [":path"] = "/v1/_402?resource="..path,
                   ["x-402-token"] = token,
                 },
                 nil,

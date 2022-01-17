@@ -1,6 +1,5 @@
 function fetch(r) {
-    return ngx.fetch('http://402-endpoint/',
-        {
+    return ngx.fetch('http://402-endpoint/v1/_402?resource=' + r.uri, {
             body: null, 
                 headers: {
                     'x-402-token': r.headersIn['X-402-Token'],

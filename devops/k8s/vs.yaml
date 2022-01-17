@@ -18,3 +18,9 @@ spec:
     route:
     - destination:
         host: hpay
+  - match:
+    - uri:
+        prefix: "/"
+    route:
+    - destination:
+        host: hpay-swagger
