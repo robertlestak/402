@@ -19,6 +19,7 @@ type Wallet struct {
 	PrivateKey string `json:"private_key"`
 	Txid       string `json:"txid"`
 	Network    string `json:"network"`
+	Tenant     string `json:"tenant"`
 }
 
 // NewWallet creates a new wallet and stores it to Vault
@@ -28,6 +29,24 @@ func NewWallet() (*Wallet, error) {
 		return nil, err
 	}
 	w.Type = "address"
+	werr := w.WriteVault()
+	if werr != nil {
+		return w, werr
+	}
+	return w, nil
+}
+
+// NewTenantWallet creates a new wallet for a tenant and stores it to Vault
+func NewTenantWallet(tenant string) (*Wallet, error) {
+	if tenant == "" {
+		return nil, errors.New("tenant is empty")
+	}
+	w, err := NewEphemeralWallet()
+	if err != nil {
+		return nil, err
+	}
+	w.Type = "address"
+	w.Tenant = tenant
 	werr := w.WriteVault()
 	if werr != nil {
 		return w, werr
@@ -66,6 +85,10 @@ func (w *Wallet) WriteVault() error {
 		"type":   w.Type,
 	})
 	l.Info("WriteVault")
+	if w.Tenant != "" {
+		w.Tenant = os.Getenv("DEFAULT_TENANT")
+		l.Info("WriteVault default tenant")
+	}
 	sec := map[string]interface{}{
 		"type":        w.Type,
 		"address":     w.Address,
@@ -73,8 +96,9 @@ func (w *Wallet) WriteVault() error {
 		"private_key": w.PrivateKey,
 		"txid":        w.Txid,
 		"network":     w.Network,
+		"tenant":      w.Tenant,
 	}
-	err := WriteSecretWithFreshToken(fmt.Sprintf("%s/%s", os.Getenv("VAULT_KV_NAME"), w.Address), sec)
+	err := WriteSecretWithFreshToken(fmt.Sprintf("%s/%s/%s", os.Getenv("VAULT_KV_NAME"), w.Tenant, w.Address), sec)
 	if err != nil {
 		return err
 	}
@@ -97,6 +121,9 @@ func (w *Wallet) ParseMap(sec map[string]interface{}) error {
 	if network, ok := sec["network"]; ok {
 		w.Network = network.(string)
 	}
+	if tenant, ok := sec["tenant"]; ok {
+		w.Tenant = tenant.(string)
+	}
 	l.Info("ParseMap parsed")
 	return nil
 }
@@ -108,9 +135,14 @@ func (w *Wallet) GetByAddress() error {
 		"action":  "GetByAddress",
 		"type":    w.Type,
 		"address": w.Address,
+		"tenant":  w.Tenant,
 	})
 	l.Info("GetByAddress")
-	sec, err := GetSecretWithFreshToken(fmt.Sprintf("%s/%s", os.Getenv("VAULT_KV_NAME"), w.Address))
+	if w.Tenant == "" {
+		w.Tenant = os.Getenv("DEFAULT_TENANT")
+		l.Info("GetByAddress default tenant")
+	}
+	sec, err := GetSecretWithFreshToken(fmt.Sprintf("%s/%s/%s", os.Getenv("VAULT_KV_NAME"), w.Tenant, w.Address))
 	if err != nil {
 		l.Error(err)
 		return err
@@ -131,6 +163,7 @@ func (w *Wallet) AddTxData() error {
 		"address": w.Address,
 		"txid":    w.Txid,
 		"network": w.Network,
+		"tenant":  w.Tenant,
 	})
 	l.Info("AddTxData")
 	if w.Txid == "" {

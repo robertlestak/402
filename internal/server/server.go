@@ -74,6 +74,10 @@ func handlePaymentSocket(conn *websocket.Conn) error {
 		}
 		return nil
 	}
+	if payment.Tenant == "" {
+		l.Info("tenant is empty, using DEFAULT_TENANT")
+		payment.Tenant = os.Getenv("DEFAULT_TENANT")
+	}
 	if !utils.NetworkSupported(payment.Network) {
 		l.Error("network not supported")
 		if err := conn.WriteJSON(wsError{Error: "network not supported"}); err != nil {
@@ -197,6 +201,8 @@ func Server() error {
 	})
 	l.Info("start")
 	r := mux.NewRouter()
+
+	r.HandleFunc(apiPathPrefix("/admin/upstreams"), upstream.HandleUpdateUpstream).Methods("POST")
 
 	r.HandleFunc(apiPathPrefix("/tokens/jwks"), auth.HandleCreateJWKS).Methods("GET")
 	r.HandleFunc(apiPathPrefix("/tokens/valid"), auth.HandleValidateJWT).Methods("GET")

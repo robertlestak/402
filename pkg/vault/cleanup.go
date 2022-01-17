@@ -12,6 +12,7 @@ import (
 // CleanupJob is a job to cleanup unused addresses
 type CleanupJob struct {
 	RetentionTime time.Duration
+	Tenant        string
 }
 
 // Secret is a secret
@@ -136,7 +137,11 @@ func (c *CleanupJob) GetSecrets() error {
 	})
 	l.Debug("start")
 	defer l.Debug("end")
-	sec, err := ListSecretsRetry(os.Getenv("VAULT_KV_NAME"))
+	p := os.Getenv("VAULT_KV_NAME")
+	if c.Tenant != "" {
+		p = path.Join(p, c.Tenant)
+	}
+	sec, err := ListSecretsRetry(p)
 	if err != nil {
 		l.Error(err)
 		return err
@@ -151,6 +156,9 @@ func (c *CleanupJob) GetSecrets() error {
 		go cleanupWorkCollector(c.RetentionTime, work, res)
 	}
 	for _, s := range sec {
+		if c.Tenant != "" {
+			s = path.Join(c.Tenant, s)
+		}
 		work <- Secret{
 			Path: path.Join(os.Getenv("VAULT_KV_NAME"), s),
 		}
@@ -166,22 +174,60 @@ func (c *CleanupJob) GetSecrets() error {
 	return nil
 }
 
+func tenantCleanupWorker(retentionTime time.Duration, work chan string, res chan error) {
+	l := log.WithFields(log.Fields{
+		"package":       "vault",
+		"action":        "tenantCleanupWorker",
+		"retentionTime": retentionTime,
+	})
+	l.Debug("start")
+	defer l.Debug("end")
+	for j := range work {
+		l.Debugf("tenant cleanup job %+v", j)
+		c := CleanupJob{
+			RetentionTime: retentionTime,
+			Tenant:        j,
+		}
+		if err := c.GetSecrets(); err != nil {
+			l.Error(err)
+			res <- err
+			return
+		}
+		res <- nil
+	}
+}
+
 // Cleanup cleans up unused addresses beyond retention time
 func Cleanup(retentionTime time.Duration) error {
 	l := log.WithFields(log.Fields{
 		"package": "cache",
 	})
 	l.Debug("Cleaning up unused addresses")
-	if len(os.Args) < 5 {
+	if retentionTime == 0 {
 		l.Error("no retention time specified")
 		return fmt.Errorf("no retention time specified")
 	}
-	c := CleanupJob{
-		RetentionTime: retentionTime,
-	}
-	if err := c.GetSecrets(); err != nil {
+	tenants, err := ListSecretsRetry(os.Getenv("VAULT_KV_NAME"))
+	if err != nil {
 		l.Error(err)
 		return err
+	}
+	l.Debugf("Got tenants %+v", tenants)
+	tenantJobs := make(chan string, len(tenants))
+	tenantRes := make(chan error, len(tenants))
+	for i := 0; i < 10; i++ {
+		go tenantCleanupWorker(retentionTime, tenantJobs, tenantRes)
+	}
+	for _, t := range tenants {
+		tenantJobs <- t
+	}
+	close(tenantJobs)
+	for i := 0; i < len(tenants); i++ {
+		err := <-tenantRes
+		if err != nil {
+			l.Error(err)
+			return err
+		}
 	}
 	return nil
 }
@@ -223,7 +269,13 @@ func Cli() error {
 	}
 	switch os.Args[3] {
 	case "list-secrets":
-		sec, err := ListSecretsRetry(os.Getenv("VAULT_KV_NAME"))
+		var kvn string
+		if len(os.Args) == 5 {
+			kvn = path.Join(os.Getenv("VAULT_KV_NAME"), os.Args[4])
+		} else {
+			kvn = os.Getenv("VAULT_KV_NAME")
+		}
+		sec, err := ListSecretsRetry(kvn)
 		if err != nil {
 			l.Error(err)
 			return err

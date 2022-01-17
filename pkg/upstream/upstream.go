@@ -1,18 +1,21 @@
 package upstream
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/robertlestak/hpay/internal/cache"
+	"github.com/robertlestak/hpay/internal/db"
 	"github.com/robertlestak/hpay/internal/utils"
 	"github.com/robertlestak/hpay/pkg/auth"
 	log "github.com/sirupsen/logrus"
-	yaml "gopkg.in/yaml.v2"
+	"gorm.io/gorm"
 )
 
 var (
@@ -39,32 +42,110 @@ type UpstreamSelector struct {
 
 // Upstream represents an upstream
 type Upstream struct {
-	Name     *string           `json:"name" yaml:"name"`
-	Endpoint *string           `json:"endpoint" yaml:"endpoint"`
-	Method   *HPayMethod       `json:"method" yaml:"method"`
-	Selector *UpstreamSelector `json:"selector" yaml:"selector"`
+	gorm.Model
+	Tenant   *string           `gorm:"uniqueIndex:idx_tenant_name,not null" json:"tenant" yaml:"tenant"`
+	Name     *string           `gorm:"uniqueIndex:idx_tenant_name,not null" json:"name" yaml:"name"`
+	Endpoint *string           `gorm:"not null" json:"endpoint" yaml:"endpoint"`
+	Method   *HPayMethod       `gorm:"not null" json:"method" yaml:"method"`
+	Selector *UpstreamSelector `gorm:"type:jsonb" json:"selector" yaml:"selector"`
+}
+
+func (a UpstreamSelector) Value() (driver.Value, error) {
+	return json.Marshal(a)
+}
+
+func (a *UpstreamSelector) Scan(value interface{}) error {
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
+	}
+	return json.Unmarshal(b, &a)
 }
 
 // Init initializes the upstreams
-func Init(f string) error {
+func Init() error {
 	l := log.WithFields(log.Fields{
 		"action": "Upstream.Init",
-		"file":   f,
 	})
 	l.Debug("start")
-	yamlFile, err := ioutil.ReadFile(f)
-	if err != nil {
-		l.Errorf("yamlFile.Get err #%v ", err)
-		return err
+	if lerr := Load(); lerr != nil {
+		l.Error(lerr)
+		return lerr
 	}
-	err = yaml.Unmarshal(yamlFile, &Upstreams)
+	go Loader()
+	l.Debug("end")
+	return nil
+}
+
+// Load loads the upstreams from the database
+func Load() error {
+	l := log.WithFields(log.Fields{
+		"action": "Upstream.Load",
+	})
+	l.Debug("start")
+	err := db.DB.Find(&Upstreams).Error
 	if err != nil {
-		l.Errorf("Unmarshal: %v", err)
+		l.Errorf("Find: %v", err)
 		return err
 	}
 	l.Infof("Loaded %d upstreams", len(Upstreams))
 	l.Debug("end")
 	return nil
+}
+
+func (u *Upstream) Create() error {
+	l := log.WithFields(log.Fields{
+		"action": "Upstream.Create",
+	})
+	l.Debug("start")
+	if err := db.DB.Create(u).Error; err != nil {
+		l.Errorf("Create: %v", err)
+		return err
+	}
+	l.Debug("end")
+	return nil
+}
+
+func (u *Upstream) Update() error {
+	l := log.WithFields(log.Fields{
+		"action": "Upstream.Update",
+	})
+	l.Debug("start")
+	if u.Name == nil || *u.Name == "" {
+		l.Error("name is empty")
+		return errors.New("name is empty")
+	}
+	if u.Tenant == nil || *u.Tenant == "" {
+		l.Error("tenant is empty")
+		return errors.New("tenant is empty")
+	}
+	res := db.DB.Where("name = ? and tenant = ?", u.Name, u.Tenant).Updates(u)
+	if res.Error != nil {
+		l.Errorf("Update: %v", res.Error)
+		return res.Error
+	} else if res.RowsAffected == 0 {
+		if cerr := u.Create(); cerr != nil {
+			l.Errorf("Create: %v", cerr)
+			return cerr
+		}
+	}
+	l.Debug("end")
+	return nil
+}
+
+// Loader loads the upstreams from the database continually
+func Loader() {
+	l := log.WithFields(log.Fields{
+		"action": "Upstream.Loader",
+	})
+	l.Debug("start")
+	for {
+		time.Sleep(time.Minute)
+		l.Debug("loading upstreams")
+		if err := Load(); err != nil {
+			l.Fatalf("Load: %v", err)
+		}
+	}
 }
 
 // UpstreamForRequest inspects the incoming request, checks the selectors, and returns the matching upstream
@@ -77,7 +158,15 @@ func UpstreamForRequest(r *http.Request) (*Upstream, error) {
 		l.Error("No upstreams specified")
 		return nil, errors.New("no upstreams specified")
 	}
+	reqTenant := r.Header.Get("X-402-Tenant")
+	if reqTenant == "" {
+		l.Error("No tenant specified, using DEFAULT_TENANT")
+		reqTenant = os.Getenv("DEFAULT_TENANT")
+	}
 	for _, u := range Upstreams {
+		if *u.Tenant != reqTenant {
+			continue
+		}
 		l.WithField("upstream", u.Endpoint).Debug("Checking upstream")
 		selectorsMatch := make(map[string]bool)
 		selectorsMatch["hosts"] = true
@@ -119,7 +208,10 @@ func UpstreamForRequest(r *http.Request) (*Upstream, error) {
 				break RangeSelectors
 			}
 		}
-		l.WithField("selectorsMatch", selectorsMatch).Debug("Selectors match")
+		l.WithFields(log.Fields{
+			"selectorsMatch": selectorsMatch,
+			"endpoint":       *u.Endpoint,
+		}).Debug("Selectors match")
 		return &u, nil
 	}
 	l.Error("No upstreams matched, using default")
@@ -345,4 +437,82 @@ func HandlePurgeResource(w http.ResponseWriter, r *http.Request) {
 	}
 	l.Debug("end")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (u *Upstream) Validate() error {
+	l := log.WithFields(log.Fields{
+		"action": "Upstream.Validate",
+	})
+	l.Debug("start")
+	if u == nil {
+		l.Error("Upstream is nil")
+		return errors.New("upstream is nil")
+	}
+	if u.Endpoint == nil {
+		l.Error("No endpoint")
+		return errors.New("no endpoint")
+	}
+	if u.Name == nil || *u.Name == "" {
+		l.Error("No name")
+		return errors.New("no name")
+	}
+	if u.Tenant == nil || *u.Tenant == "" {
+		l.Error("No tenant")
+		return errors.New("no tenant")
+	}
+	l.Debug("end")
+	return nil
+}
+
+func HandleUpdateUpstream(w http.ResponseWriter, r *http.Request) {
+	l := log.WithFields(log.Fields{
+		"action": "HandleUpdateUpstream",
+	})
+	l.Debug("start")
+	up := &Upstream{}
+	defer l.Debug("end")
+	defer r.Body.Close()
+	if err := json.NewDecoder(r.Body).Decode(up); err != nil {
+		l.Errorf("json.NewDecoder: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	l.WithField("upstream", up).Debug("Upstream")
+	if err := up.Validate(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	token := utils.AuthToken(r)
+	if token == "" {
+		l.Error("No auth token")
+		http.Error(w, "No auth token", http.StatusUnauthorized)
+		return
+	}
+	// set to false if we are relying on middleware to validate tokens
+	validateToken := false
+	if !auth.TokenOwnsTenant(token, *up.Tenant, validateToken) {
+		l.Error("Not owner")
+		http.Error(w, "Not owner", http.StatusUnauthorized)
+		return
+	}
+	if err := up.Update(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func ListTenants() ([]string, error) {
+	l := log.WithFields(log.Fields{
+		"action": "ListTenants",
+	})
+	l.Debug("start")
+	var tenants []string
+	err := db.DB.Raw("SELECT DISTINCT tenant FROM upstreams").Scan(&tenants).Error
+	if err != nil {
+		l.Errorf("DB.Exec: %v", err)
+		return nil, err
+	}
+	l.Debug("end")
+	return tenants, nil
 }

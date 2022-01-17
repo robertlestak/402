@@ -34,6 +34,7 @@ type Payment struct {
 	Token         string            `json:"token" gorm:"-"`
 	MetaHash      string            `json:"meta_hash" gorm:"-"`
 	EncryptedMeta string            `json:"encrypted_meta" gorm:"-"`
+	Tenant        string            `json:"tenant"`
 }
 
 // Tx is a generic representation of a transaction on the blockchain
@@ -115,9 +116,16 @@ func (p *Payment) Get() error {
 		l.Error("network is empty")
 		return errors.New("network is empty")
 	}
-	if err := db.DB.Where("txid = ? AND network = ?", p.Txid, p.Network).First(p).Error; err != nil {
-		l.WithError(err).Error("Failed to get payment")
-		return err
+	if p.Tenant == "" {
+		if err := db.DB.Where("txid = ? AND network = ?", p.Txid, p.Network).First(p).Error; err != nil {
+			l.WithError(err).Error("Failed to get payment")
+			return err
+		}
+	} else {
+		if err := db.DB.Where("txid = ? AND network = ? AND tenant = ?", p.Txid, p.Network, p.Tenant).First(p).Error; err != nil {
+			l.WithError(err).Error("Failed to get payment")
+			return err
+		}
 	}
 	return nil
 }

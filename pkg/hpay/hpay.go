@@ -47,7 +47,7 @@ func ValidateClaims(claims jwt.MapClaims) error {
 	})
 	l.Debug("start")
 	defer l.Debug("end")
-	if claims["sub"] == "root" {
+	if claims["sub"] == os.Getenv("ROOT_TENANT") {
 		l.WithField("sub", claims["sub"]).Error("Invalid sub")
 		return errors.New("invalid sub")
 	}
@@ -185,11 +185,15 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	l.Debug("no claims")
 	w.WriteHeader(http.StatusPaymentRequired)
+	if meta.Payment.Tenant == "" {
+		meta.Payment.Tenant = os.Getenv("DEFAULT_TENANT")
+		l.WithField("tenant", meta.Payment.Tenant).Debug("No tenant provided, using default")
+	}
 	// loop through payment requests to create addrs if necessary
 	for _, pr := range meta.Payment.Requests {
 		// if site owner has not provided static address, create one
 		if pr.Address == "" && os.Getenv("VAULT_ENABLE") == "true" {
-			newWallet, werr := vault.NewWallet()
+			newWallet, werr := vault.NewTenantWallet(meta.Payment.Tenant)
 			if werr != nil {
 				l.WithError(werr).Error("Failed to create wallet")
 				http.Error(w, "Failed to create wallet", http.StatusInternalServerError)

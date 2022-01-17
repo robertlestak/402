@@ -67,21 +67,11 @@ We plan to extend the spec in the future to make more use of the `x-402` namespa
 
 ## Upstream Configuration
 
-Upstreams are configured with a `YAML` file. Each endpoint must specify a unique combination of selectors that inbound requests will be matched against. If there is only one upstream configured, or no upstreams match the selectors, it is assumed to use the initial / default upstream.
+Upstreams are configured in the database and are automatically refreshed at a regular interval. Each endpoint must specify a unique combination of selectors that inbound requests will be matched against. If there is only one upstream configured, or no upstreams match the selectors, it is assumed to use the initial / default upstream.
 
-### Example Configuration
+Upstreams cam be configured by an admin user through the API.
 
-```yaml
-- name: default
-  method: html
-  endpoint: http://example
-  selector:
-    hosts:
-    - "*"
-    paths:
-    - "*"
-    headers: {}
-```
+When running in multi-tenant mode, in addition to the selectors (which must be unique within a single tenant), the gateway / client must also provide the `x-402-tenant` header set to the name of the current tenant. This enables multiple tenants to use common selectors / wildcards without conflict. If the `x-402-tenant` header is not provided, the default tenant will be assumed.
 
 ### Configuration Methods
 

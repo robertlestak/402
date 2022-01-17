@@ -32,9 +32,6 @@ func init() {
 	if kerr := auth.InitSignKeys(); kerr != nil {
 		l.WithError(kerr).Fatal("Failed to initialize auth keys")
 	}
-	if uuerr := upstream.Init(os.Getenv("UPSTREAM_CFG")); uuerr != nil {
-		l.WithError(uuerr).Fatal("Failed to initialize upstreams")
-	}
 	if cerr := cache.Init(); cerr != nil {
 		l.WithError(cerr).Fatal("Failed to initialize cache")
 	}
@@ -47,13 +44,17 @@ func init() {
 	}
 	db.DB.AutoMigrate(&payment.Payment{})
 	db.DB.AutoMigrate(&payment.PaymentRequest{})
+	db.DB.AutoMigrate(&upstream.Upstream{})
+	if uuerr := upstream.Init(); uuerr != nil {
+		l.WithError(uuerr).Fatal("Failed to initialize upstreams")
+	}
 	if os.Getenv("VAULT_ENABLE") == "true" {
 		_, verr := vault.NewClient()
 		if verr != nil {
 			l.WithError(verr).Fatal("Failed to initialize vault")
 		}
 		if os.Getenv("VAULT_CLEANUP_ENABLE") == "true" {
-			go vault.Cleaner()
+			//go vault.Cleaner()
 		}
 	}
 	l.Info("end")

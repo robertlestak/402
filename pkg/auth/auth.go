@@ -138,7 +138,7 @@ func GenerateJWT(claims map[string]interface{}, exp time.Time, keyID string) (st
 // this function should only be available to the root user
 func GenerateRootJWT(exp time.Time) (string, error) {
 	return GenerateJWT(map[string]interface{}{
-		"sub": "root",
+		"sub": os.Getenv("ROOT_TENANT"),
 	}, exp, utils.KeyID())
 }
 
@@ -255,10 +255,29 @@ func TokenIsRoot(token string) bool {
 		return false
 	}
 	if sub, ok := claims["sub"]; ok {
-		if sub.(string) == "root" {
+		if sub.(string) == os.Getenv("ROOT_TENANT") {
 			l.Debug("end")
 			return true
 		}
+	}
+	l.Debug("end")
+	return false
+}
+
+// RequestIsRoot returns true if the provided request has a root sub
+func RequestIsRoot(r *http.Request) bool {
+	l := log.WithFields(log.Fields{
+		"func": "RequestIsRoot",
+	})
+	l.Debug("start")
+	token := utils.AuthToken(r)
+	if token == "" {
+		l.Debug("token empty")
+		return false
+	}
+	if TokenIsRoot(token) {
+		l.Debug("token is root")
+		return true
 	}
 	l.Debug("end")
 	return false
@@ -283,4 +302,39 @@ func HandleValidateJWT(w http.ResponseWriter, r *http.Request) {
 	if jerr != nil {
 		l.Errorf("failed to encode claims: %s", jerr)
 	}
+}
+
+// TokenOwnsTeanant returns true if the provided token has the provided tenant
+// in the sub claim. If the token is root, it returns true. If verified is false,
+// it will not verify the token before checking the sub claim. This is useful when running
+// behind validating middleware where we may not have the signing keys but we trust our infra.
+func TokenOwnsTenant(token string, tenant string, verified bool) bool {
+	l := log.WithFields(log.Fields{
+		"func":   "TokenOwnsTenant",
+		"tenant": tenant,
+	})
+	l.Println("start")
+	if TokenIsRoot(token) {
+		l.Debug("token is root")
+		return true
+	}
+	var claims jwt.MapClaims
+	var err error
+	if verified {
+		_, claims, err = ValidateJWT(token)
+	} else {
+		_, claims, err = ParseClaimsUnverified(token)
+	}
+	if err != nil {
+		l.Errorf("failed to parse token: %s", err)
+		return false
+	}
+	if sub, ok := claims["sub"]; ok {
+		if sub.(string) == tenant {
+			l.Debug("end")
+			return true
+		}
+	}
+	l.Debug("end")
+	return false
 }

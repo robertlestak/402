@@ -161,12 +161,16 @@ func ListSecrets(p string) ([]string, error) {
 	pp := strings.Split(p, "/")
 	pp = insertSliceString(pp, 1, "metadata")
 	p = strings.Join(pp, "/")
-	secret, err := Client.Logical().List(p + "/")
+	secret, err := Client.Logical().List(p)
 	if err != nil {
 		log.Printf("vault.ListSecrets(%+v) error: %v\n", p, err)
 		return nil, err
 	}
 	log.Printf("vault.ListSecrets(%+v) returned %+v\n", p, secret)
+	if secret == nil {
+		log.Printf("vault.ListSecrets(%+v) error: secret is nil\n", p)
+		return nil, nil
+	}
 	k := secret.Data["keys"].([]interface{})
 	var keys []string
 	for _, v := range k {
