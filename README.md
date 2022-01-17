@@ -65,6 +65,24 @@ We plan to extend the spec in the future to make more use of the `x-402` namespa
 }
 ```
 
+## Upstream Configuration
+
+Upstreams are configured with a `YAML` file. Each endpoint must specify a unique combination of selectors that inbound requests will be matched against. If there is only one upstream configured, or no upstreams match the selectors, it is assumed to use the initial / default upstream.
+
+### Example Configuration
+
+```yaml
+- name: default
+  method: html
+  endpoint: http://example
+  selector:
+    hosts:
+    - "*"
+    paths:
+    - "*"
+    headers: {}
+```
+
 ### Configuration Methods
 
 Each upstream must specify a configuration method. This is how `402` will communicate with the upstream to retrieve payment requirements and request metadata. Currently `http` and `html` methods are supported. For performance, `http` is the recommended approach when possible, however `html` enables `402` to be enabled on sites where you have limited or no control over the server infrastructure for your site.
