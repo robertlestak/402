@@ -2,12 +2,18 @@ package vault
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"path"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/gorilla/mux"
+	"github.com/robertlestak/hpay/internal/utils"
+	"github.com/robertlestak/hpay/pkg/auth"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -20,6 +26,11 @@ type Wallet struct {
 	Txid       string `json:"txid"`
 	Network    string `json:"network"`
 	Tenant     string `json:"tenant"`
+}
+
+type walletJob struct {
+	w     *Wallet
+	Error error
 }
 
 // NewWallet creates a new wallet and stores it to Vault
@@ -187,4 +198,229 @@ func (w *Wallet) AddTxData() error {
 	}
 	l.Info("AddTxData added")
 	return nil
+}
+
+func getSecretWorker(jobs chan walletJob, res chan walletJob) {
+	for j := range jobs {
+		if err := j.w.GetByAddress(); err != nil {
+			j.Error = err
+			res <- j
+			continue
+		}
+		res <- j
+	}
+}
+
+func GetAllWalletsForTenant(t string) ([]Wallet, error) {
+	l := log.WithFields(log.Fields{
+		"action": "GetAllWalletsForTenant",
+		"tenant": t,
+	})
+	l.Info("GetAllWalletsForTenant")
+	wallets := []Wallet{}
+	if t == "" {
+		t = os.Getenv("DEFAULT_TENANT")
+		l.Info("GetAllWalletsForTenant default tenant")
+	}
+	secs, err := ListSecretsRetry(fmt.Sprintf("%s/%s", os.Getenv("VAULT_KV_NAME"), t))
+	if err != nil {
+		l.Error(err)
+		return wallets, err
+	}
+	jobs := make(chan walletJob, len(secs))
+	res := make(chan walletJob, len(secs))
+	for w := 1; w <= 10; w++ {
+		go getSecretWorker(jobs, res)
+	}
+	for _, sec := range secs {
+		w := Wallet{
+			Address: sec,
+			Tenant:  t,
+		}
+		jobs <- walletJob{
+			w: &w,
+		}
+	}
+	close(jobs)
+	for a := 0; a < len(secs); a++ {
+		r := <-res
+		if r.Error != nil {
+			l.Error(r.Error)
+			return wallets, r.Error
+		}
+		wallets = append(wallets, *r.w)
+	}
+	l.Info("GetAllWalletsForTenant retrieved")
+	return wallets, nil
+}
+
+func GetDesiredWalletsForTenant(t string, secs []string) ([]Wallet, error) {
+	l := log.WithFields(log.Fields{
+		"action":  "GetDesiredWalletsForTenant",
+		"tenant":  t,
+		"desired": secs,
+	})
+	l.Info("GetDesiredWalletsForTenant")
+	wallets := []Wallet{}
+	if t == "" {
+		t = os.Getenv("DEFAULT_TENANT")
+		l.Info("GetDesiredWalletsForTenant default tenant")
+	}
+	if len(secs) == 0 {
+		l.Error("desired is empty")
+		return wallets, errors.New("desired is empty")
+	}
+	jobs := make(chan walletJob, len(secs))
+	res := make(chan walletJob, len(secs))
+	for w := 1; w <= 10; w++ {
+		go getSecretWorker(jobs, res)
+	}
+	for _, sec := range secs {
+		w := Wallet{
+			Address: sec,
+			Tenant:  t,
+		}
+		jobs <- walletJob{
+			w: &w,
+		}
+	}
+	close(jobs)
+	for a := 0; a < len(secs); a++ {
+		r := <-res
+		if r.Error != nil {
+			l.Error(r.Error)
+			return wallets, r.Error
+		}
+		wallets = append(wallets, *r.w)
+	}
+	l.Info("GetDesiredWalletsForTenant retrieved")
+	return wallets, nil
+}
+
+func HandleGetWalletsForTenant(w http.ResponseWriter, r *http.Request) {
+	l := log.WithFields(log.Fields{
+		"action": "HandleGetWalletsForTenant",
+	})
+	l.Info("HandleGetWalletsForTenant")
+	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
+	token := utils.AuthToken(r)
+	if token == "" {
+		l.Error("HandleGetWalletsForTenant no token")
+		http.Error(w, "no token", http.StatusUnauthorized)
+		return
+	}
+	verify := true
+	if !auth.TokenOwnsTenant(token, tenant, verify) {
+		l.Error("token does not own tenant")
+		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
+		return
+	}
+	var desiredAddresses []string
+	if err := json.NewDecoder(r.Body).Decode(&desiredAddresses); err != nil {
+		l.Error(err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	wallets, err := GetDesiredWalletsForTenant(tenant, desiredAddresses)
+	if err != nil {
+		l.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if jerr := json.NewEncoder(w).Encode(wallets); jerr != nil {
+		l.Error(jerr)
+		http.Error(w, jerr.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func HandleListWalletsForTenant(w http.ResponseWriter, r *http.Request) {
+	l := log.WithFields(log.Fields{
+		"action": "HandleListWalletsForTenant",
+	})
+	l.Info("HandleListWalletsForTenant")
+	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
+	if tenant == "" {
+		l.Error("HandleListWalletsForTenant no tenant")
+		tenant = os.Getenv("DEFAULT_TENANT")
+	}
+	token := utils.AuthToken(r)
+	if token == "" {
+		l.Error("HandleListWalletsForTenant no token")
+		http.Error(w, "no token", http.StatusUnauthorized)
+		return
+	}
+	verify := true
+	if !auth.TokenOwnsTenant(token, tenant, verify) {
+		l.Error("token does not own tenant")
+		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
+		return
+	}
+	addresses, err := ListSecretsRetry(path.Join(os.Getenv("VAULT_KV_NAME"), tenant))
+	if err != nil {
+		l.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if jerr := json.NewEncoder(w).Encode(addresses); jerr != nil {
+		l.Error(jerr)
+		http.Error(w, jerr.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func DeleteSecretForTenant(tenant string, address string) error {
+	l := log.WithFields(log.Fields{
+		"action":  "DeleteSecretForTenant",
+		"tenant":  tenant,
+		"address": address,
+	})
+	l.Info("DeleteSecretForTenant")
+	if tenant == "" {
+		l.Error("tenant is empty")
+		return errors.New("tenant is empty")
+	}
+	if address == "" {
+		l.Error("address is empty")
+		return errors.New("address is empty")
+	}
+	if err := DeleteSecret(fmt.Sprintf("%s/%s/%s", os.Getenv("VAULT_KV_NAME"), tenant, address)); err != nil {
+		l.Error(err)
+		return err
+	}
+	l.Info("DeleteSecretForTenant deleted")
+	return nil
+}
+
+func HandleDeleteSecretForTenant(w http.ResponseWriter, r *http.Request) {
+	l := log.WithFields(log.Fields{
+		"action": "HandleDeleteSecretForTenant",
+	})
+	l.Info("HandleDeleteSecretForTenant")
+	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
+	token := utils.AuthToken(r)
+	if token == "" {
+		l.Error("HandleDeleteSecretForTenant no token")
+		http.Error(w, "no token", http.StatusUnauthorized)
+		return
+	}
+	verify := true
+	if !auth.TokenOwnsTenant(token, tenant, verify) {
+		l.Error("token does not own tenant")
+		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
+		return
+	}
+	vars := mux.Vars(r)
+	address := vars["address"]
+	if address == "" {
+		l.Error("address is empty")
+		http.Error(w, "address is empty", http.StatusBadRequest)
+		return
+	}
+	if err := DeleteSecretForTenant(tenant, address); err != nil {
+		l.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }

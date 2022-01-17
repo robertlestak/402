@@ -28,8 +28,8 @@ type PaymentRequest struct {
 // on the chain before saving to the database
 type Payment struct {
 	gorm.Model
-	Txid          string            `json:"txid"`
-	Network       string            `json:"network"`
+	Txid          string            `gorm:"uniqueIndex:idx_txid_network" json:"txid"`
+	Network       string            `gorm:"uniqueIndex:idx_txid_network" json:"network"`
 	Requests      []*PaymentRequest `json:"requests"`
 	Token         string            `json:"token" gorm:"-"`
 	MetaHash      string            `json:"meta_hash" gorm:"-"`
