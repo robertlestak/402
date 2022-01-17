@@ -40,16 +40,18 @@ type Page struct {
 	WSURL string `json:"ws_url"`
 }
 
-// Validate Claims validates the requested claims against any configured protected claims
-func ValidateClaims(claims jwt.MapClaims) error {
+// ValidateRequestedClaims validates the requested claims against any configured protected claims
+func ValidateRequestedClaims(claims jwt.MapClaims) error {
 	l := log.WithFields(log.Fields{
-		"action": "ValidateClaims",
+		"action": "ValidateRequestedClaims",
 	})
 	l.Debug("start")
 	defer l.Debug("end")
-	if claims["sub"] == os.Getenv("ROOT_TENANT") {
-		l.WithField("sub", claims["sub"]).Error("Invalid sub")
-		return errors.New("invalid sub")
+	if _, ok := claims["iss"]; ok {
+		return errors.New("iss claim is protected")
+	}
+	if _, ok := claims["sub"]; ok {
+		return errors.New("sub claim is protected")
 	}
 	return nil
 }
@@ -65,7 +67,7 @@ func (m *Meta) GenerateToken() (string, error) {
 	if m.Exp > 0 {
 		exp = time.Now().Add(m.Exp)
 	}
-	if verr := ValidateClaims(m.Claims); verr != nil {
+	if verr := ValidateRequestedClaims(m.Claims); verr != nil {
 		l.WithError(verr).Error("Failed to validate claims")
 		return "", verr
 	}

@@ -221,10 +221,6 @@ data:
           - "application/json"
           produces:
           - "application/json"
-          parameters:
-          - in: "query"
-            name: "resource"
-            type: string
           responses:
             "200":
               description: "OK"
