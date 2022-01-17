@@ -68,9 +68,10 @@ spec:
               request_handle:logInfo("validating token against 402-service")
               local streamInfo = request_handle:streamInfo()
               local certs = streamInfo:downstreamSslConnection():uriSanPeerCertificate()
-              local 402sa = "spiffe://cluster.local/ns/humun-client-svcs/sa/hpay"
-              if table.contains(certs, 402sa) then
-                request_handle:logInfo("received call from 402 service, allowing")
+              local h402sa = "spiffe://cluster.local/ns/humun-client-svcs/sa/hpay"
+              request_handle:logInfo(h402sa)
+              if table.contains(certs, h402sa) then
+              request_handle:logInfo("402 SA found, return")
                 return
               end
               local headers, body = request_handle:httpCall(
