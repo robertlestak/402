@@ -81,6 +81,7 @@ spec:
                   [":authority"] = request_handle:headers():get(":authority"),
                   [":path"] = "/v1/_402?resource="..path,
                   ["x-402-token"] = token,
+                  ["x-402-tenant"] = "",
                 },
                 nil,
                 5000)

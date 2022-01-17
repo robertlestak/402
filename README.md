@@ -84,6 +84,7 @@ Servers can enable `402` on an endpoint by sending the following headers when th
 ##### Headers
 
 `x-402-required: [Boolean]`
+
 `x-402-request: [String Base64 JSON]`
 
 #### HTML
