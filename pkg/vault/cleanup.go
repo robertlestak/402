@@ -94,7 +94,7 @@ func (s *Secret) Cleanup(retentionTime time.Duration) error {
 		s.Wallet = w
 	}
 	if retentionTime > 0 && s.UpdatedTime.Add(retentionTime).Before(time.Now()) && s.Wallet.Txid == "" {
-		l.Debugf("Secret %s must be cleaned up", s)
+		l.Debugf("Secret %s must be cleaned up", s.Path)
 		s.MustCleanup = true
 	}
 	//s.MustCleanup = true
