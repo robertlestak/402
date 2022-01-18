@@ -103,6 +103,28 @@ func HandleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	tokens := utils.AuthTokens(r)
+	var userOwnsPlan bool
+	for _, t := range tokens {
+		_, cl, err := auth.ValidateJWT(t)
+		if err != nil {
+			l.Error("error validating token: ", err)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if pid, ok := cl["pid"]; ok {
+			if pid == plan {
+				userOwnsPlan = true
+				break
+			}
+		}
+	}
+	if !userOwnsPlan {
+		l.Error("user does not own plan")
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	ap := &AccessPlan{Name: plan}
 	if err := ap.GetByName(); err != nil {
 		l.Error("error getting access plan: ", err)
@@ -114,6 +136,7 @@ func HandleCreateTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "access plan not found", http.StatusNotFound)
 		return
 	}
+	t.AccessPlanID = ap.ID
 	if err := t.GetByName(); err != nil && err != gorm.ErrRecordNotFound {
 		l.Error("error getting tenant: ", err)
 		http.Error(w, "error getting tenant", http.StatusInternalServerError)
