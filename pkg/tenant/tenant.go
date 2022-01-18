@@ -92,10 +92,26 @@ func HandleCreateTenant(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	tenant := vars["tenant"]
 	t := &Tenant{Name: tenant}
+	var plan string
+	var ok bool
+	if plan, ok = vars["plan"]; !ok {
+		plan = os.Getenv("DEFAULT_PLAN_NAME")
+	}
 	r.Header.Set(utils.HeaderPrefix()+"tenant", tenant)
 	if !auth.RequestAuthorized(r) {
 		l.Debug("unauthorized")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	ap := &AccessPlan{Name: plan}
+	if err := ap.GetByName(); err != nil {
+		l.Error("error getting access plan: ", err)
+		http.Error(w, "error getting access plan", http.StatusInternalServerError)
+		return
+	}
+	if ap.ID == 0 {
+		l.Error("access plan not found")
+		http.Error(w, "access plan not found", http.StatusNotFound)
 		return
 	}
 	if err := t.GetByName(); err != nil && err != gorm.ErrRecordNotFound {
@@ -144,6 +160,11 @@ func HandleGetTenant(w http.ResponseWriter, r *http.Request) {
 	if !auth.RequestAuthorized(r) {
 		l.Debug("unauthorized")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if t.AccessPlanID == 0 {
+		l.WithField("tenant", t).Debug("tenant has no access plan")
+		http.Error(w, "tenant has no access plan", http.StatusNotFound)
 		return
 	}
 	l.WithField("tenant", t).Debug("tenant found")
@@ -210,9 +231,8 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	plan := vars["plan"]
 	if plan == "" {
-		l.Error("plan is empty")
-		http.Error(w, "plan is empty", http.StatusBadRequest)
-		return
+		l.Info("plan is empty, using default")
+		plan = os.Getenv("DEFAULT_PLAN_NAME")
 	}
 	ap := &AccessPlan{Name: plan}
 	if err := ap.GetByName(); err != nil {

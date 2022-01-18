@@ -541,6 +541,73 @@ data:
               description: "OK"
             "500":
               description: "Internal Server Error"
+      /tenants/{tenant}/{plan}:
+        get:
+          tags:
+          - "cloud"
+          summary: "Get current tenant details"
+          description: ""
+          operationId: "tenant.HandleGetTenantPlan"
+          security:
+          - Bearer: []
+          parameters:
+          - in: path
+            name: tenant
+            type: string
+            required: true
+          - in: path
+            name: plan
+            type: string
+            required: true
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                $ref: "#/definitions/Tenant"
+            "500":
+              description: "Internal Server Error"
+        head:
+          tags:
+          - "cloud"
+          summary: "Get tenant payment request"
+          description: ""
+          operationId: "tenant.HandleHeadPaymentRequestPlan"
+          parameters:
+          - in: path
+            name: tenant
+            type: string
+            required: true
+          - in: path
+            name: plan
+            type: string
+            required: true
+          responses:
+            "402":
+              description: "OK"
+            "500":
+              description: "Internal Server Error"
+        post:
+          tags:
+          - "cloud"
+          summary: "Create / update tenant"
+          description: ""
+          operationId: "tenant.HandleCreateTenantPlan"
+          security:
+          - Bearer: []
+          parameters:
+          - in: path
+            name: tenant
+            type: string
+            required: true
+          - in: path
+            name: plan
+            type: string
+            required: true
+          responses:
+            "200":
+              description: "OK"
+            "500":
+              description: "Internal Server Error"
       /tenants/{tenant}/jwt:
         get:
           tags:
