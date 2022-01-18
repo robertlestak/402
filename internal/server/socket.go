@@ -15,6 +15,7 @@ import (
 	"github.com/robertlestak/hpay/pkg/auth"
 	"github.com/robertlestak/hpay/pkg/hpay"
 	"github.com/robertlestak/hpay/pkg/payment"
+	"github.com/robertlestak/hpay/pkg/upstream"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -102,15 +103,35 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 		return errors.New("invalid claims: " + verr.Error())
 	}
 	l.Debug("claims valid")
+	// generate a new token for this request
+	token, terr := meta.GenerateToken()
+	if terr != nil {
+		l.Error("generate token:", terr)
+		if err := conn.WriteJSON(wsError{Error: "generate token"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return errors.New("generate token: " + terr.Error())
+	}
+	if token == "" {
+		l.Error("token is empty")
+		if err := conn.WriteJSON(wsError{Error: "token empty"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return errors.New("token empty")
+	}
 	mess := &wsMessage{
-		Type:  "auth",
-		Token: token,
+		Type:    "auth",
+		Token:   token,
+		Payment: meta.Payment,
 	}
 	err = conn.WriteJSON(mess)
 	if err != nil {
 		l.Println("write:", err)
 		return err
 	}
+	l.Info("job complete")
 	return nil
 }
 
@@ -214,7 +235,13 @@ func handlePayment(conn *websocket.Conn, message *wsMessage) error {
 			} else if strings.Contains(msg.Payload, payment.Txid) {
 				meta.Payment = payment
 				if !clientAccessClaims(meta.Claims) {
-					if verr := hpay.ValidateRequestedClaims(meta.Claims, meta.Payment.Tenant); verr != nil {
+					us := &upstream.Upstream{}
+					us.ID = meta.UpstreamID
+					if err := us.GetByID(); err != nil {
+						l.Error(err)
+						return
+					}
+					if verr := hpay.ValidateRequestedClaims(meta.Claims, us); verr != nil {
 						l.WithError(verr).Error("Failed to validate claims")
 						if err := conn.WriteJSON(wsError{Error: "Failed to validate claims"}); err != nil {
 							l.Println("write:", err)

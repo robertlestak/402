@@ -114,7 +114,7 @@ Based on the size of your claims, you will need to generate an adequately sized 
 Example key generation:
 
 ```bash
-openssl genrsa -out example.key 6144
+openssl genrsa -out example.key 8124
 ```
 
 ### Encrypted Checksum

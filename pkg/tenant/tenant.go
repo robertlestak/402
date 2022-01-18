@@ -21,8 +21,9 @@ import (
 
 type Tenant struct {
 	gorm.Model
-	Name  string `gorm:"unique_index"`
-	Email string
+	Name         string `gorm:"unique_index"`
+	Email        string
+	AccessPlanID uint
 }
 
 func (t *Tenant) Validate() error {
@@ -152,10 +153,12 @@ func HandleGetTenant(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *Tenant) PaymentRequest(exp time.Duration) (string, error) {
+func (t *Tenant) PaymentRequest(ap *AccessPlan) (string, error) {
 	l := log.WithFields(log.Fields{
-		"package": "tenant",
-		"action":  "Tenant.PaymentRequest",
+		"package":    "tenant",
+		"action":     "Tenant.PaymentRequest",
+		"name":       t.Name,
+		"accessPlan": ap,
 	})
 	l.Debug("start")
 	defer l.Debug("end")
@@ -166,17 +169,21 @@ func (t *Tenant) PaymentRequest(exp time.Duration) (string, error) {
 	req := &hpay.Meta{
 		Claims: jwt.MapClaims{
 			"sub": t.Name,
+			"pid": ap.Name,
+			"iss": os.Getenv("JWT_ISS"),
 		},
-		Exp: exp,
 		Payment: &payment.Payment{
-			Tenant: os.Getenv("ROOT_TENANT"),
-			Requests: []*payment.PaymentRequest{
-				{
-					Amount:  1,
-					Network: "polygon",
-				},
-			},
+			Tenant: t.Name,
 		},
+	}
+	if ap.Expiry > 0 {
+		req.Exp = time.Duration(ap.Expiry)
+	}
+	for _, r := range ap.AccessPlanAmounts {
+		req.Payment.Requests = append(req.Payment.Requests, &payment.PaymentRequest{
+			Network: r.Network,
+			Amount:  r.Amount,
+		})
 	}
 	jd, err := json.Marshal(req)
 	if err != nil {
@@ -201,9 +208,20 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "tenant is empty", http.StatusBadRequest)
 		return
 	}
+	plan := vars["plan"]
+	if plan == "" {
+		l.Error("plan is empty")
+		http.Error(w, "plan is empty", http.StatusBadRequest)
+		return
+	}
+	ap := &AccessPlan{Name: plan}
+	if err := ap.GetByName(); err != nil {
+		l.Error("error getting access plan: ", err)
+		http.Error(w, "error getting access plan", http.StatusInternalServerError)
+		return
+	}
 	t := &Tenant{Name: tenant}
-	exp := time.Hour * 24 * 30
-	req, err := t.PaymentRequest(exp)
+	req, err := t.PaymentRequest(ap)
 	if err != nil {
 		l.Error("error getting payment request: ", err)
 		http.Error(w, "error getting payment request", http.StatusInternalServerError)

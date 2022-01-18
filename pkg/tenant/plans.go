@@ -22,6 +22,7 @@ type AccessPlan struct {
 	gorm.Model
 	Name              string              `gorm:"unique_index" json:"name"`
 	Description       string              `json:"description"`
+	Expiry            int                 `json:"expiry"`
 	AccessPlanAmounts []*AccessPlanAmount `json:"amount"`
 }
 
@@ -62,6 +63,10 @@ func (a *AccessPlan) Create() error {
 
 func (a *AccessPlan) Update() error {
 	return db.DB.Where("name = ?", a.Name).Save(a).Error
+}
+
+func (a *AccessPlan) GetByName() error {
+	return db.DB.Where("name = ?", a.Name).Preload("AccessPlanAmounts").First(a).Error
 }
 
 func HandleCreateAccessPlan(w http.ResponseWriter, r *http.Request) {

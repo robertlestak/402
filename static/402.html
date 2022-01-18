@@ -94,7 +94,6 @@
             } else if (data.type == "auth") {
                 // payment validated
                 // this is probably not the best way to do this
-                location.reload();
                 let params = new URLSearchParams(window.location.search); 
                 let resource = params.get("resource")
                 setCookies(data.token, resource)
@@ -112,6 +111,7 @@
 
 function setCookies(token, resource) {
     return new Promise(function(resolve, reject) {
+        console.log(token)
         cleanBase64 = btoa(resource).replaceAll("/", "_").replaceAll("+", "-").replaceAll("=", "")
         // the cookie should expire with the expiry of the token
         document.cookie = "402_token=" + token + "; path=/";

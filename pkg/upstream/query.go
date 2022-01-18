@@ -122,3 +122,19 @@ func HandleDeleteUpstreamForTenant(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (u *Upstream) IsRootTenant() bool {
+	if u.Tenant == nil {
+		return false
+	}
+	return *u.Tenant == os.Getenv("ROOT_TENANT")
+}
+
+func (u *Upstream) GetByID() error {
+	l := log.WithFields(log.Fields{
+		"action":   "GetByID",
+		"upstream": u,
+	})
+	l.Debug("start")
+	return db.DB.Where("id = ?", u.ID).First(u).Error
+}

@@ -25,6 +25,7 @@ type Meta struct {
 	Exp           time.Duration    `json:"exp"`
 	Payment       *payment.Payment `json:"payment"`
 	Customization Customization    `json:"customization"`
+	UpstreamID    uint             `json:"upstream_id"`
 }
 
 // Customization contains data the upstream can provide to customize the payment page
@@ -41,15 +42,15 @@ type Page struct {
 }
 
 // ValidateRequestedClaims validates the requested claims against any configured protected claims
-func ValidateRequestedClaims(claims jwt.MapClaims, tenant string) error {
+func ValidateRequestedClaims(claims jwt.MapClaims, us *upstream.Upstream) error {
 	l := log.WithFields(log.Fields{
-		"action": "ValidateRequestedClaims",
-		"tenant": tenant,
+		"action":   "ValidateRequestedClaims",
+		"upstream": us,
 	})
 	l.Debug("start")
 	defer l.Debug("end")
-	if tenant == os.Getenv("ROOT_TENANT") {
-		l.Debug("end")
+	if us.IsRootTenant() {
+		l.Debug("root tenant")
 		return nil
 	}
 	if _, ok := claims["iss"]; ok {
@@ -72,7 +73,7 @@ func (m *Meta) GenerateToken() (string, error) {
 	if m.Exp > 0 {
 		exp = time.Now().Add(m.Exp)
 	}
-	if m.Payment.Tenant != "" {
+	if _, ok := m.Claims["iss"]; !ok && m.Payment.Tenant != "" {
 		m.Claims["iss"] = m.Payment.Tenant
 	}
 	token, err := auth.GenerateJWT(m.Claims, exp, utils.KeyID())
@@ -190,23 +191,25 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+	meta.UpstreamID = us.ID
 	l.WithField("meta", meta).Debug("Got meta")
 	if claims != nil {
 		if verr := auth.ValidateClaims(claims, meta.Claims); verr != nil {
 			l.Error("claims not valid")
-			http.Error(w, "claims not valid", http.StatusUnauthorized)
+		} else {
+			l.Debug("claims valid")
+			w.WriteHeader(http.StatusOK)
 			return
 		}
-		l.Debug("claims valid")
-		w.WriteHeader(http.StatusOK)
-		return
+	} else {
+		l.Debug("no claims")
+		if cerr := ValidateRequestedClaims(meta.Claims, us); cerr != nil {
+			l.Error("requested claims not valid for request")
+			http.Error(w, "requested claims not valid for request", http.StatusUnauthorized)
+			return
+		}
 	}
-	l.Debug("no claims")
-	if cerr := ValidateRequestedClaims(meta.Claims, meta.Payment.Tenant); cerr != nil {
-		l.Error("requested claims not valid")
-		http.Error(w, "requested claims not valid", http.StatusUnauthorized)
-		return
-	}
+
 	w.WriteHeader(http.StatusPaymentRequired)
 	if meta.Payment.Tenant == "" {
 		meta.Payment.Tenant = os.Getenv("DEFAULT_TENANT")
