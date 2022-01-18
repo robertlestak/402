@@ -91,12 +91,16 @@
             var data = JSON.parse(e.data)
             if (data.error) {
                 console.log("error", data.error)
-            } else if (data.txid && data.token) {
+            } else if (data.type == "auth") {
                 // payment validated
-                // the cookie should expire with the expiry of the token
-                document.cookie = "402_token=" + data.token + "; path=/";
                 // this is probably not the best way to do this
                 location.reload();
+                let params = new URLSearchParams(window.location.search); 
+                let resource = params.get("resource")
+                setCookies(data.token, resource)
+                    .then(function() {
+                        window.location.reload()
+                    })
             }
         }
         socket.onclose = function () {
@@ -106,13 +110,40 @@
     }
 })()
 
+function setCookies(token, resource) {
+    return new Promise(function(resolve, reject) {
+        cleanBase64 = btoa(resource).replaceAll("/", "_").replaceAll("+", "-").replaceAll("=", "")
+        // the cookie should expire with the expiry of the token
+        document.cookie = "402_token=" + token + "; path=/";
+        document.cookie = "402_token_"+cleanBase64+"=" + token + "; path=/";
+        resolve(true)
+    });
+}
+
 function paymentComplete(txid, network) {
     var data = {
-        txid: txid,
-        network: network,
-        encrypted_meta: "{{.Meta.Payment.EncryptedMeta}}",
-        meta_hash: "{{.Meta.Payment.MetaHash}}",
-        tenant: "{{.Meta.Payment.Tenant}}",
+        type: "payment",
+        payment: {
+            txid: txid,
+            network: network,
+            encrypted_meta: "{{.Meta.Payment.EncryptedMeta}}",
+            meta_hash: "{{.Meta.Payment.MetaHash}}",
+            tenant: "{{.Meta.Payment.Tenant}}",
+        }
+    }
+    ws.send(JSON.stringify(data))
+    // show a loading indicator while we wait for payment to clear
+}
+
+function manualAuth() {
+    var data = {
+        type: "auth",
+        token: sessionStorage.getItem("402_token"),
+        payment: {
+            encrypted_meta: "{{.Meta.Payment.EncryptedMeta}}",
+            meta_hash: "{{.Meta.Payment.MetaHash}}",
+            tenant: "{{.Meta.Payment.Tenant}}",
+        }
     }
     ws.send(JSON.stringify(data))
     // show a loading indicator while we wait for payment to clear

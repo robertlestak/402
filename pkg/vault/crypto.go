@@ -302,18 +302,12 @@ func HandleGetWalletsForTenant(w http.ResponseWriter, r *http.Request) {
 		"action": "HandleGetWalletsForTenant",
 	})
 	l.Info("HandleGetWalletsForTenant")
+	if !auth.RequestAuthorized(r) {
+		l.Error("Not authorized")
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
+		return
+	}
 	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
-	token := utils.AuthToken(r)
-	if token == "" {
-		l.Error("HandleGetWalletsForTenant no token")
-		http.Error(w, "no token", http.StatusUnauthorized)
-		return
-	}
-	if !auth.TokenOwnsTenant(token, tenant) {
-		l.Error("token does not own tenant")
-		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
-		return
-	}
 	var desiredAddresses []string
 	if err := json.NewDecoder(r.Body).Decode(&desiredAddresses); err != nil {
 		l.Error(err)
@@ -343,15 +337,9 @@ func HandleListWalletsForTenant(w http.ResponseWriter, r *http.Request) {
 		l.Error("HandleListWalletsForTenant no tenant")
 		tenant = os.Getenv("DEFAULT_TENANT")
 	}
-	token := utils.AuthToken(r)
-	if token == "" {
-		l.Error("HandleListWalletsForTenant no token")
-		http.Error(w, "no token", http.StatusUnauthorized)
-		return
-	}
-	if !auth.TokenOwnsTenant(token, tenant) {
-		l.Error("token does not own tenant")
-		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
+	if !auth.RequestAuthorized(r) {
+		l.Error("Not authorized")
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 	addresses, err := ListSecretsRetry(path.Join(os.Getenv("VAULT_KV_NAME"), tenant))
@@ -396,15 +384,9 @@ func HandleDeleteSecretForTenant(w http.ResponseWriter, r *http.Request) {
 	})
 	l.Info("HandleDeleteSecretForTenant")
 	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
-	token := utils.AuthToken(r)
-	if token == "" {
-		l.Error("HandleDeleteSecretForTenant no token")
-		http.Error(w, "no token", http.StatusUnauthorized)
-		return
-	}
-	if !auth.TokenOwnsTenant(token, tenant) {
-		l.Error("token does not own tenant")
-		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
+	if !auth.RequestAuthorized(r) {
+		l.Error("Not authorized")
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 	vars := mux.Vars(r)

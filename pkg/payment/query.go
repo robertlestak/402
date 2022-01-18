@@ -46,20 +46,14 @@ func HandleGetPaymentByTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "network is empty", http.StatusBadRequest)
 		return
 	}
-	token := utils.AuthToken(r)
-	if token == "" {
-		l.Error("token is empty")
-		http.Error(w, "token is empty", http.StatusUnauthorized)
-		return
-	}
 	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
 	if tenant == "" {
 		l.Info("tenant is empty")
 		tenant = os.Getenv("DEFAULT_TENANT")
 	}
-	if !auth.TokenOwnsTenant(token, tenant) {
-		l.Error("token does not own tenant")
-		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
+	if !auth.RequestAuthorized(r) {
+		l.Error("Not authorized")
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 	p, err := GetPaymentByTxidNetwork(tenant, txid, network)
@@ -124,20 +118,14 @@ func HandleListPaymentsForTenant(w http.ResponseWriter, r *http.Request) {
 	if pageSizeI < 1 || pageSizeI > 100 {
 		pageSizeI = 10
 	}
-	token := utils.AuthToken(r)
-	if token == "" {
-		l.Error("token is empty")
-		http.Error(w, "token is empty", http.StatusUnauthorized)
-		return
-	}
 	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
 	if tenant == "" {
 		l.Info("tenant is empty")
 		tenant = os.Getenv("DEFAULT_TENANT")
 	}
-	if !auth.TokenOwnsTenant(token, tenant) {
-		l.Error("token does not own tenant")
-		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
+	if !auth.RequestAuthorized(r) {
+		l.Error("Not authorized")
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 	payments, err := ListPayments(tenant, pageI, pageSizeI)

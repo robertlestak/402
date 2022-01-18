@@ -34,15 +34,9 @@ func HandleListUpstreamsForTenant(w http.ResponseWriter, r *http.Request) {
 		l.Info("tenant is empty")
 		tenant = os.Getenv("DEFAULT_TENANT")
 	}
-	token := utils.AuthToken(r)
-	if token == "" {
-		l.Error("token is empty")
-		http.Error(w, "token is empty", http.StatusUnauthorized)
-		return
-	}
-	if !auth.TokenOwnsTenant(token, tenant) {
-		l.Error("token does not own tenant")
-		http.Error(w, "token does not own tenant", http.StatusUnauthorized)
+	if !auth.RequestAuthorized(r) {
+		l.Error("Not authorized")
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 	page := r.URL.Query().Get("page")
@@ -115,15 +109,10 @@ func HandleDeleteUpstreamForTenant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	token := utils.AuthToken(r)
-	if token == "" {
-		l.Error("No auth token")
-		http.Error(w, "No auth token", http.StatusUnauthorized)
-		return
-	}
-	if !auth.TokenOwnsTenant(token, *up.Tenant) {
-		l.Error("Not owner")
-		http.Error(w, "Not owner", http.StatusUnauthorized)
+	r.Header.Set(utils.HeaderPrefix()+"tenant", *up.Tenant)
+	if !auth.RequestAuthorized(r) {
+		l.Error("Not authorized")
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 	if err := up.Delete(); err != nil {

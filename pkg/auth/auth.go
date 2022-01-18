@@ -230,6 +230,10 @@ func ValidateClaims(jwtClaims jwt.MapClaims, requestedClaims jwt.MapClaims) erro
 		"requestedClaims": requestedClaims,
 	})
 	l.Debug("start")
+	if RootClaimsValid(jwtClaims) {
+		l.Debug("root claims valid")
+		return nil
+	}
 	for k, v := range requestedClaims {
 		if v2, ok := jwtClaims[k]; ok {
 			if v2 != v {
@@ -245,22 +249,36 @@ func ValidateClaims(jwtClaims jwt.MapClaims, requestedClaims jwt.MapClaims) erro
 	return nil
 }
 
+func RootClaimsValid(claims jwt.MapClaims) bool {
+	l := log.WithFields(log.Fields{
+		"func":      "RootClaimsValid",
+		"jwtClaims": claims,
+	})
+	l.Debug("start")
+	if sub, ok := claims["sub"]; ok {
+		if sub.(string) == os.Getenv("ROOT_TENANT") {
+			l.Debug("end")
+			return true
+		}
+	}
+	l.Debug("end")
+	return false
+}
+
 // TokenIsRoot returns true if the provided token has a root sub
 func TokenIsRoot(token string) bool {
 	l := log.WithFields(log.Fields{
 		"func": "TokenIsRoot",
 	})
 	l.Debug("start")
-	_, claims, err := ValidateJWT(token)
+	_, c, err := ValidateJWT(token)
 	if err != nil {
 		l.Errorf("failed to validate token: %s", err)
 		return false
 	}
-	if sub, ok := claims["sub"]; ok {
-		if sub.(string) == os.Getenv("ROOT_TENANT") {
-			l.Debug("end")
-			return true
-		}
+	if RootClaimsValid(c) {
+		l.Debug("end")
+		return true
 	}
 	l.Debug("end")
 	return false
@@ -272,14 +290,11 @@ func RequestIsRoot(r *http.Request) bool {
 		"func": "RequestIsRoot",
 	})
 	l.Debug("start")
-	token := utils.AuthToken(r)
-	if token == "" {
-		l.Debug("token empty")
-		return false
-	}
-	if TokenIsRoot(token) {
-		l.Debug("token is root")
-		return true
+	for _, token := range utils.AuthTokens(r) {
+		if TokenIsRoot(token) {
+			l.Debug("token is root")
+			return true
+		}
 	}
 	l.Debug("end")
 	return false
@@ -291,19 +306,23 @@ func HandleValidateJWT(w http.ResponseWriter, r *http.Request) {
 		"func": "HandleValidateJWT",
 	})
 	l.Println("start")
-	token := utils.AuthToken(r)
-	_, claims, err := ValidateJWT(token)
-	if err != nil {
-		l.Errorf("failed to validate token: %s", err)
-		w.WriteHeader(http.StatusUnauthorized)
+	for _, token := range utils.AuthTokens(r) {
+		_, claims, err := ValidateJWT(token)
+		if err != nil {
+			l.Errorf("failed to validate token: %s", err)
+			continue
+		}
+		l.Infof("claims=%v", claims)
+		w.WriteHeader(http.StatusOK)
+		jerr := json.NewEncoder(w).Encode(claims)
+		if jerr != nil {
+			l.Errorf("failed to encode claims: %s", jerr)
+			continue
+		}
 		return
 	}
-	l.Infof("claims=%v", claims)
-	w.WriteHeader(http.StatusOK)
-	jerr := json.NewEncoder(w).Encode(claims)
-	if jerr != nil {
-		l.Errorf("failed to encode claims: %s", jerr)
-	}
+	l.Println("end")
+	w.WriteHeader(http.StatusUnauthorized)
 }
 
 // TokenOwnsTeanant returns true if the provided token has the provided tenant
@@ -378,4 +397,28 @@ func ValidateJWTWithService(idtoken string) (*jwt.Token, jwt.MapClaims, error) {
 		l.Infof("auth.ParseClaimsUnverified: %v", claims)
 		return token, claims, nil
 	}
+}
+
+func RequestAuthorized(r *http.Request) bool {
+	l := log.WithFields(log.Fields{
+		"action": "RequestAuthorized",
+	})
+	l.Info("RequestAuthorized")
+	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
+	if tenant == "" {
+		l.Info("tenant is empty")
+		tenant = os.Getenv("DEFAULT_TENANT")
+	}
+	for _, token := range utils.AuthTokens(r) {
+		if token == "" {
+			l.Error("HandleGetWalletsForTenant no token")
+			continue
+		}
+		if TokenOwnsTenant(token, tenant) {
+			l.Error("token owns tenant")
+			return true
+		}
+	}
+	l.Info("requestOwnsTenant false")
+	return false
 }

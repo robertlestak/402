@@ -418,15 +418,9 @@ func HandlePurgeResource(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	t := utils.AuthToken(r)
-	if t == "" {
-		l.Error("No auth token")
-		http.Error(w, "No auth token", http.StatusUnauthorized)
-		return
-	}
-	if !auth.TokenIsRoot(t) {
-		l.Error("Not root")
-		http.Error(w, "Not root", http.StatusUnauthorized)
+	if !auth.RequestAuthorized(r) {
+		l.Error("Not authorized")
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 	resource := r.FormValue("resource")
@@ -482,15 +476,9 @@ func HandleUpdateUpstream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	token := utils.AuthToken(r)
-	if token == "" {
-		l.Error("No auth token")
-		http.Error(w, "No auth token", http.StatusUnauthorized)
-		return
-	}
-	if !auth.TokenOwnsTenant(token, *up.Tenant) {
-		l.Error("Not owner")
-		http.Error(w, "Not owner", http.StatusUnauthorized)
+	if !auth.RequestAuthorized(r) {
+		l.Error("Not authorized")
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
 	if err := up.Update(); err != nil {

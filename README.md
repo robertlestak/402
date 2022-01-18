@@ -67,7 +67,9 @@ We plan to extend the spec in the future to make more use of the `x-402` namespa
 
 ### Resource Claims
 
-`402` operates an a claims-based identity model. Servers / sites / resources can specify claims are broad or as granular as desired.
+`402` operates an a claims-based identity model. Servers / sites / resources can specify claims are broad or as granular as desired. This enables sites to require one set of claims to manage global access, and a more granular subset of claims to grant more specific access. `402` will issue a new token on each new payment.
+
+For each payment, `402` will set the token as a `Cookie` on the domain with the name `402_token`. Additionally, `402` will create a duplicate cookie with the name `402_token_[escaped base64 resource path]`. On request validation, `402` will first attempt to validate the most granular token before falling back to other configured tokens.
 
 
 ## Upstream Configuration

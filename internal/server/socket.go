@@ -3,10 +3,12 @@ package server
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/websocket"
 	"github.com/robertlestak/hpay/internal/pubsub"
 	"github.com/robertlestak/hpay/internal/utils"
@@ -21,22 +23,104 @@ type wsError struct {
 	Error string `json:"error"`
 }
 
-// handlePaymentSocket handles a websocket connection
-// it is a monolith e2e function (should be refactored) that receives a transaction
-// from the client, validates the tx against the specified chain, and sends the
-// client their access token for succesful payment
-func handlePaymentSocket(conn *websocket.Conn) error {
+type wsMessage struct {
+	Type    string           `json:"type"`
+	Payment *payment.Payment `json:"payment"`
+	Token   string           `json:"token"`
+}
+
+func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 	l := log.WithFields(log.Fields{
-		"action": "handlePaymentSocket",
+		"action": "handleAuth",
 	})
 	l.Info("start")
-	payment := &payment.Payment{}
-	err := conn.ReadJSON(&payment)
+	defer l.Info("end")
+	var err error
+	token := message.Token
+	if token == "" {
+		l.Info("no token")
+		if err := conn.WriteJSON(wsError{Error: "no token"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return errors.New("no token")
+	}
+	payment := message.Payment
+	var claims jwt.MapClaims
+	_, claims, err = auth.ValidateJWT(token)
 	if err != nil {
-		l.Println("read:", err)
+		l.WithError(err).Error("Failed to validate JWT")
+		if err := conn.WriteJSON(wsError{Error: "invalid token"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+	}
+	l.WithField("claims", claims).Debug("JWT validated")
+	bdata, berr := base64.StdEncoding.DecodeString(payment.EncryptedMeta)
+	if berr != nil {
+		l.Error("base64 decode:", berr)
+		if err := conn.WriteJSON(wsError{Error: "base64 decode error"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return nil
+	}
+	decryptedMeta, derr := auth.DecryptWithPrivateKey(bdata, utils.KeyID())
+	if derr != nil {
+		l.Error("decrypt meta:", derr)
+		if err := conn.WriteJSON(wsError{Error: "decrypt meta"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return nil
+	}
+	meta := hpay.Meta{}
+	err = json.Unmarshal(decryptedMeta, &meta)
+	if err != nil {
+		l.Error("unmarshal meta:", err)
+		if err := conn.WriteJSON(wsError{Error: "unmarshal meta"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return nil
+	}
+	l.WithField("meta", meta).Debug("Got meta")
+	if claims == nil {
+		l.Info("no claims")
+		if err := conn.WriteJSON(wsError{Error: "no claims"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return errors.New("no claims")
+	}
+	if verr := auth.ValidateClaims(claims, meta.Claims); verr != nil {
+		l.WithError(verr).Error("Failed to validate claims")
+		if err := conn.WriteJSON(wsError{Error: "invalid claims"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return errors.New("invalid claims: " + verr.Error())
+	}
+	l.Debug("claims valid")
+	mess := &wsMessage{
+		Type:  "auth",
+		Token: token,
+	}
+	err = conn.WriteJSON(mess)
+	if err != nil {
+		l.Println("write:", err)
 		return err
 	}
-	l.Info("handle payment")
+	return nil
+}
+
+func handlePayment(conn *websocket.Conn, message *wsMessage) error {
+	var err error
+	l := log.WithFields(log.Fields{
+		"action": "handlePayment",
+	})
+	l.Info("start")
+	payment := message.Payment
 	if payment.Txid == "" {
 		l.Error("txid is empty")
 		if err := conn.WriteJSON(wsError{Error: "txid empty"}); err != nil {
@@ -139,8 +223,12 @@ func handlePaymentSocket(conn *websocket.Conn) error {
 					}
 					return
 				}
-				payment.Token = token
-				err = conn.WriteJSON(payment)
+				mess := &wsMessage{
+					Type:    "auth",
+					Token:   token,
+					Payment: meta.Payment,
+				}
+				err = conn.WriteJSON(mess)
 				if err != nil {
 					l.Println("write:", err)
 					return
@@ -150,6 +238,39 @@ func handlePaymentSocket(conn *websocket.Conn) error {
 			}
 		}
 	}()
+	return nil
+}
+
+// handlePaymentSocket handles a websocket connection
+// it is a monolith e2e function (should be refactored) that receives a transaction
+// from the client, validates the tx against the specified chain, and sends the
+// client their access token for succesful payment
+func handlePaymentSocket(conn *websocket.Conn) error {
+	l := log.WithFields(log.Fields{
+		"action": "handlePaymentSocket",
+	})
+	l.Info("start")
+	message := &wsMessage{}
+	err := conn.ReadJSON(&message)
+	if err != nil {
+		l.Println("read:", err)
+		return err
+	}
+	l.Info("handle message")
+	switch message.Type {
+	case "auth":
+		l.Info("auth")
+		if err = handleAuth(conn, message); err != nil {
+			l.Println("handle auth:", err)
+			return err
+		}
+	case "payment":
+		l.Info("payment")
+		if herr := handlePayment(conn, message); herr != nil {
+			l.Error(herr)
+			return herr
+		}
+	}
 	return nil
 }
 

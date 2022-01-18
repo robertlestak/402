@@ -140,16 +140,29 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "no resource")
 		return
 	}
-	authToken := utils.AuthToken(r)
-	if authToken == "" {
+	authTokens := utils.AuthTokens(r)
+	if len(authTokens) == 0 {
 		l.Info("no auth token")
 	} else {
-		_, claims, err = auth.ValidateJWT(authToken)
+		var token string
+		if rc, ok := authTokens[resource]; ok {
+			token = rc
+		} else if hc, ok := authTokens[os.Getenv("HEADER_NAME_PREFIX")+"_token"]; ok {
+			token = hc
+		} else if rc, ok := authTokens["Authorization"]; ok {
+			token = rc
+		} else {
+			l.Error("no auth token")
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "no auth token")
+			return
+		}
+		_, claims, err = auth.ValidateJWT(token)
 		if err != nil {
 			l.WithError(err).Error("Failed to validate JWT")
 			//http.Error(w, err.Error(), http.StatusUnauthorized)
 			//return
-			authToken = ""
+			token = ""
 		}
 		l.WithField("claims", claims).Debug("JWT validated")
 	}
