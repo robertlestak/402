@@ -47,6 +47,8 @@ func init() {
 	db.DB.AutoMigrate(&payment.PaymentRequest{})
 	db.DB.AutoMigrate(&upstream.Upstream{})
 	db.DB.AutoMigrate(&tenant.Tenant{})
+	db.DB.AutoMigrate(&tenant.AccessPlan{})
+	db.DB.AutoMigrate(&tenant.AccessPlanAmount{})
 	if uuerr := upstream.Init(); uuerr != nil {
 		l.WithError(uuerr).Fatal("Failed to initialize upstreams")
 	}

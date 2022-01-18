@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -107,4 +108,23 @@ func StringInSlice(a string, list []string) bool {
 // KeyID is a simple wrapper that returns the current active KeyID
 func KeyID() string {
 	return os.Getenv("JWT_KEY_ID")
+}
+
+func GetPage(r *http.Request) (int, int) {
+	page := 1
+	pageSize := 10
+	var err error
+	if p := r.URL.Query().Get("page"); p != "" {
+		page, err = strconv.Atoi(p)
+		if err != nil {
+			page = 1
+		}
+	}
+	if ps := r.URL.Query().Get("pageSize"); ps != "" {
+		pageSize, err = strconv.Atoi(ps)
+		if err != nil {
+			pageSize = 10
+		}
+	}
+	return page, pageSize
 }

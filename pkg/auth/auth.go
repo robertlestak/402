@@ -340,6 +340,10 @@ func TokenOwnsTenant(token string, tenant string, verified bool) bool {
 		"tenant":      tenant,
 		"withService": withService,
 	})
+	if token == "" {
+		l.Error("token is empty")
+		return false
+	}
 	l.Println("start")
 	if TokenIsRoot(token) {
 		l.Debug("token is root")

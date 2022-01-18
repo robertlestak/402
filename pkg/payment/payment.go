@@ -31,9 +31,9 @@ type Payment struct {
 	Txid          string            `gorm:"uniqueIndex:idx_txid_network" json:"txid"`
 	Network       string            `gorm:"uniqueIndex:idx_txid_network" json:"network"`
 	Requests      []*PaymentRequest `json:"requests"`
-	Token         string            `json:"token" gorm:"-"`
-	MetaHash      string            `json:"meta_hash" gorm:"-"`
-	EncryptedMeta string            `json:"encrypted_meta" gorm:"-"`
+	Token         string            `json:"token,omitempty" gorm:"-"`
+	MetaHash      string            `json:"meta_hash,omitempty" gorm:"-"`
+	EncryptedMeta string            `json:"encrypted_meta,omitempty" gorm:"-"`
 	Tenant        string            `json:"tenant"`
 }
 

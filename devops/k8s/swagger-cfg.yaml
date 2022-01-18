@@ -418,6 +418,74 @@ data:
             "500":
               description: "Internal Server Error"
               
+      /plans:
+        get:
+          tags:
+          - "cloud"
+          summary: "List access plans"
+          description: ""
+          operationId: "tenant.HandleListAccessPlans"
+          parameters:
+          - in: query
+            name: page
+            type: number
+            required: false
+            default: 1
+          - in: query
+            name: pageSize
+            type: number
+            required: false
+            default: 10
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                type: array
+                items:
+                  $ref: "#/definitions/Plan"
+            "500":
+              description: "Internal Server Error"
+        post:
+          tags:
+          - "cloud"
+          summary: "Create / update access plan"
+          description: ""
+          operationId: "tenant.HandleCreateAccessPlan"
+          security:
+          - Bearer: []
+          parameters:
+          - in: body
+            name: body
+            schema:
+              $ref: "#/definitions/Plan"
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                type: array
+                items:
+                  $ref: "#/definitions/Plan"
+            "500":
+              description: "Internal Server Error"
+        delete:
+          tags:
+          - "cloud"
+          summary: "Delete access plan"
+          description: ""
+          operationId: "tenant.HandleDeleteAccessPlan"
+          security:
+          - Bearer: []
+          parameters:
+          - in: body
+            name: body
+            schema:
+              $ref: "#/definitions/Plan"
+          responses:
+            "200":
+              description: "OK"
+            "500":
+              description: "Internal Server Error"
+              
       /tenants/{tenant}:
         get:
           tags:
@@ -522,6 +590,22 @@ data:
                   type: string
                 address:
                   type: string
+      Plan:
+        type: object
+        properties:
+          name:
+            type: string
+          description:
+            type: string
+          amount:
+            type: array
+            items:
+              type: object
+              properties:
+                network:
+                  type: string
+                amount:
+                  type: number
       Upstream:
         type: object
         properties:

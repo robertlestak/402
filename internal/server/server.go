@@ -56,6 +56,10 @@ func Server() error {
 	r.HandleFunc(apiPathPrefix("/tenants/{tenant}"), tenant.HandleCreateTenant).Methods("POST")
 	r.HandleFunc(apiPathPrefix("/tenants/{tenant}/jwt"), tenant.HandleGenerateNewJWT).Methods("GET")
 
+	r.HandleFunc(apiPathPrefix("/plans"), tenant.HandleListAccessPlans).Methods("GET")
+	r.HandleFunc(apiPathPrefix("/plans"), tenant.HandleCreateAccessPlan).Methods("POST")
+	r.HandleFunc(apiPathPrefix("/plans"), tenant.HandleDeleteAccessPlan).Methods("DELETE")
+
 	r.HandleFunc(apiPathPrefix("/"), upstream.HandlePurgeResource).Methods("PURGE")
 	r.HandleFunc(apiPathPrefix("/"), hpay.HandleRequest).Methods("GET", "POST")
 
@@ -70,6 +74,7 @@ func Server() error {
 	c := cors.New(cors.Options{
 		AllowedOrigins:   strings.Split(os.Getenv("CORS_ALLOWED_ORIGINS"), ","),
 		AllowedHeaders:   strings.Split(os.Getenv("CORS_ALLOWED_HEADERS"), ","),
+		AllowedMethods:   strings.Split(os.Getenv("CORS_ALLOWED_METHODS"), ","),
 		AllowCredentials: true,
 		Debug:            os.Getenv("CORS_DEBUG") == "true",
 	})
