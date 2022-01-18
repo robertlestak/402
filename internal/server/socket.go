@@ -114,6 +114,13 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 	return nil
 }
 
+func clientAccessClaims(claims jwt.MapClaims) bool {
+	if iss, ok := claims["iss"]; ok && iss == os.Getenv("JWT_ISS") {
+		return true
+	}
+	return false
+}
+
 func handlePayment(conn *websocket.Conn, message *wsMessage) error {
 	var err error
 	l := log.WithFields(log.Fields{
@@ -206,6 +213,16 @@ func handlePayment(conn *websocket.Conn, message *wsMessage) error {
 				return
 			} else if strings.Contains(msg.Payload, payment.Txid) {
 				meta.Payment = payment
+				if !clientAccessClaims(meta.Claims) {
+					if verr := hpay.ValidateRequestedClaims(meta.Claims, meta.Payment.Tenant); verr != nil {
+						l.WithError(verr).Error("Failed to validate claims")
+						if err := conn.WriteJSON(wsError{Error: "Failed to validate claims"}); err != nil {
+							l.Println("write:", err)
+							return
+						}
+						return
+					}
+				}
 				token, terr := meta.GenerateToken()
 				if terr != nil {
 					l.Error("generate token:", terr)

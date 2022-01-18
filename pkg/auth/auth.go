@@ -121,13 +121,17 @@ func GenerateJWT(claims map[string]interface{}, exp time.Time, keyID string) (st
 		c[k] = v
 	}
 	token.Header["kid"] = keyID
-	if _, ok := c["aud"]; !ok {
-		c["aud"] = os.Getenv("JWT_AUD")
-	}
+	/*
+		if _, ok := c["aud"]; !ok {
+			c["aud"] = os.Getenv("JWT_AUD")
+		}
+	*/
 	c["iat"] = time.Now().Unix()
-	if _, ok := c["iss"]; !ok {
-		c["iss"] = os.Getenv("JWT_ISS")
-	}
+	/*
+		if _, ok := c["iss"]; !ok {
+			c["iss"] = os.Getenv("JWT_ISS")
+		}
+	*/
 	tokenString, err := token.SignedString(SignKeys[keyID])
 	if err != nil {
 		l.Errorf("failed to sign token: %s", err)
@@ -329,7 +333,7 @@ func HandleValidateJWT(w http.ResponseWriter, r *http.Request) {
 // in the sub claim. If the token is root, it returns true. If verified is false,
 // it will not verify the token before checking the sub claim. This is useful when running
 // behind validating middleware where we may not have the signing keys but we trust our infra.
-func TokenOwnsTenant(token string, tenant string) bool {
+func TokenOwnsTenant(token string, tenant string, verified bool) bool {
 	withService := os.Getenv("TOKEN_VALIDATE_WITH_SERVICE")
 	l := log.WithFields(log.Fields{
 		"func":        "TokenOwnsTenant",
@@ -345,6 +349,8 @@ func TokenOwnsTenant(token string, tenant string) bool {
 	var err error
 	if withService == "true" {
 		_, claims, err = ValidateJWTWithService(token)
+	} else if verified {
+		_, claims, err = ValidateJWT(token)
 	} else {
 		_, claims, err = ParseClaimsUnverified(token)
 	}
@@ -354,6 +360,21 @@ func TokenOwnsTenant(token string, tenant string) bool {
 	}
 	if sub, ok := claims["sub"]; ok {
 		if sub.(string) == tenant {
+			l.Debug("end")
+			return true
+		}
+	}
+	l.Debug("end")
+	return false
+}
+
+func RequestOwnsTenant(r *http.Request, tenant string) bool {
+	l := log.WithFields(log.Fields{
+		"func": "RequestOwnsTenant",
+	})
+	l.Println("start")
+	for _, token := range utils.AuthTokens(r) {
+		if TokenOwnsTenant(token, tenant, true) {
 			l.Debug("end")
 			return true
 		}
@@ -414,11 +435,30 @@ func RequestAuthorized(r *http.Request) bool {
 			l.Error("HandleGetWalletsForTenant no token")
 			continue
 		}
-		if TokenOwnsTenant(token, tenant) {
+		if TokenOwnsTenant(token, tenant, true) {
 			l.Error("token owns tenant")
 			return true
 		}
 	}
 	l.Info("requestOwnsTenant false")
+	return false
+}
+
+func RequestAuthorizedRoot(r *http.Request) bool {
+	l := log.WithFields(log.Fields{
+		"action": "RequestAuthorizedRoot",
+	})
+	l.Info("RequestAuthorizedRoot")
+	for _, token := range utils.AuthTokens(r) {
+		if token == "" {
+			l.Error("HandleGetWalletsForTenant no token")
+			continue
+		}
+		if TokenIsRoot(token) {
+			l.Error("token is root")
+			return true
+		}
+	}
+	l.Info("RequestAuthorizedRoot false")
 	return false
 }

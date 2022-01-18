@@ -88,9 +88,9 @@ data:
               description: "OK"
             "401":
               description: "Unauthorized"
-    
-    
-    
+
+
+
       /tokens/jwks:
         get:
           tags:
@@ -136,7 +136,7 @@ data:
               description: "OK"
             "401":
               description: "Invalid input"
-    
+
 
       /payments/{network}/{txid}:
         get:
@@ -226,7 +226,7 @@ data:
               description: "OK"
             "402":
               description: "Payment Required"
-    
+
       /upstreams:
         post:
           tags:
@@ -417,7 +417,88 @@ data:
               description: "OK"
             "500":
               description: "Internal Server Error"
-            
+              
+      /tenants/{tenant}:
+        get:
+          tags:
+          - "cloud"
+          summary: "Get current tenant details"
+          description: ""
+          operationId: "tenant.HandleGetTenant"
+          security:
+          - Bearer: []
+          parameters:
+          - in: path
+            name: tenant
+            type: string
+            required: true
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                $ref: "#/definitions/Tenant"
+            "500":
+              description: "Internal Server Error"
+        head:
+          tags:
+          - "cloud"
+          summary: "Get tenant payment request"
+          description: ""
+          operationId: "tenant.HandleHeadPaymentRequest"
+          parameters:
+          - in: path
+            name: tenant
+            type: string
+            required: true
+          responses:
+            "402":
+              description: "OK"
+            "500":
+              description: "Internal Server Error"
+        post:
+          tags:
+          - "cloud"
+          summary: "Create / update tenant"
+          description: ""
+          operationId: "tenant.HandleCreateTenant"
+          security:
+          - Bearer: []
+          parameters:
+          - in: path
+            name: tenant
+            type: string
+            required: true
+          responses:
+            "200":
+              description: "OK"
+            "500":
+              description: "Internal Server Error"
+      /tenants/{tenant}/jwt:
+        get:
+          tags:
+          - "cloud"
+          summary: "Generate a new token for tenant"
+          description: ""
+          operationId: "tenant.HandleGenerateNewJWT"
+          security:
+          - Bearer: []
+          parameters:
+          - in: path
+            name: tenant
+            type: string
+            required: true
+          - in: query
+            name: exp
+            type: number
+            required: false
+            default: 0
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                $ref: "#/definitions/Tenant"
+            "500":
+              description: "Internal Server Error"
         
 
     definitions:
@@ -482,6 +563,11 @@ data:
           network:
             type: string
           tenant:
+            type: string
+      Tenant:
+        type: object
+        properties:
+          name:
             type: string
 
 

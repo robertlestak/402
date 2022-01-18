@@ -10,6 +10,7 @@ import (
 	"github.com/robertlestak/hpay/pkg/auth"
 	"github.com/robertlestak/hpay/pkg/hpay"
 	"github.com/robertlestak/hpay/pkg/payment"
+	"github.com/robertlestak/hpay/pkg/tenant"
 	"github.com/robertlestak/hpay/pkg/upstream"
 	"github.com/robertlestak/hpay/pkg/vault"
 	"github.com/rs/cors"
@@ -49,7 +50,11 @@ func Server() error {
 
 	r.HandleFunc(apiPathPrefix("/payments/{network}/{txid}"), payment.HandleGetPaymentByTenant).Methods("GET")
 	r.HandleFunc(apiPathPrefix("/payments"), payment.HandleListPaymentsForTenant).Methods("GET")
-	// just for local testing remove this
+
+	r.HandleFunc(apiPathPrefix("/tenants/{tenant}"), tenant.HandleGetTenant).Methods("GET")
+	r.HandleFunc(apiPathPrefix("/tenants/{tenant}"), tenant.HandleHeadPaymentRequest).Methods("HEAD")
+	r.HandleFunc(apiPathPrefix("/tenants/{tenant}"), tenant.HandleCreateTenant).Methods("POST")
+	r.HandleFunc(apiPathPrefix("/tenants/{tenant}/jwt"), tenant.HandleGenerateNewJWT).Methods("GET")
 
 	r.HandleFunc(apiPathPrefix("/"), upstream.HandlePurgeResource).Methods("PURGE")
 	r.HandleFunc(apiPathPrefix("/"), hpay.HandleRequest).Methods("GET", "POST")
@@ -63,10 +68,10 @@ func Server() error {
 		port = "8080"
 	}
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedHeaders:   []string{"*"},
+		AllowedOrigins:   strings.Split(os.Getenv("CORS_ALLOWED_ORIGINS"), ","),
+		AllowedHeaders:   strings.Split(os.Getenv("CORS_ALLOWED_HEADERS"), ","),
 		AllowCredentials: true,
-		Debug:            true,
+		Debug:            os.Getenv("CORS_DEBUG") == "true",
 	})
 	h := c.Handler(r)
 	l.Infof("Listening on port %s", port)

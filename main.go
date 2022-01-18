@@ -11,6 +11,7 @@ import (
 	"github.com/robertlestak/hpay/pkg/auth"
 	"github.com/robertlestak/hpay/pkg/hpay"
 	"github.com/robertlestak/hpay/pkg/payment"
+	"github.com/robertlestak/hpay/pkg/tenant"
 	"github.com/robertlestak/hpay/pkg/upstream"
 	"github.com/robertlestak/hpay/pkg/vault"
 	log "github.com/sirupsen/logrus"
@@ -45,6 +46,7 @@ func init() {
 	db.DB.AutoMigrate(&payment.Payment{})
 	db.DB.AutoMigrate(&payment.PaymentRequest{})
 	db.DB.AutoMigrate(&upstream.Upstream{})
+	db.DB.AutoMigrate(&tenant.Tenant{})
 	if uuerr := upstream.Init(); uuerr != nil {
 		l.WithError(uuerr).Fatal("Failed to initialize upstreams")
 	}
@@ -54,7 +56,7 @@ func init() {
 			l.WithError(verr).Fatal("Failed to initialize vault")
 		}
 		if os.Getenv("VAULT_CLEANUP_ENABLE") == "true" {
-			//go vault.Cleaner()
+			go vault.Cleaner()
 		}
 	}
 	l.Info("end")

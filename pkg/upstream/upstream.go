@@ -158,60 +158,110 @@ func UpstreamForRequest(r *http.Request) (*Upstream, error) {
 		l.Error("No upstreams specified")
 		return nil, errors.New("no upstreams specified")
 	}
-	reqTenant := r.Header.Get("X-402-Tenant")
+	reqTenant := r.Header.Get(utils.HeaderPrefix() + "Tenant")
 	if reqTenant == "" {
 		l.Error("No tenant specified, using DEFAULT_TENANT")
 		reqTenant = os.Getenv("DEFAULT_TENANT")
 	}
+RangeUpstreams:
 	for _, u := range Upstreams {
 		if *u.Tenant != reqTenant {
 			continue
 		}
-		l.WithField("upstream", u.Endpoint).Debug("Checking upstream")
+		ll := l.WithField("upstream", *u.Endpoint)
+		ll.Debug("Checking upstream")
 		selectorsMatch := make(map[string]bool)
-		selectorsMatch["hosts"] = true
-		selectorsMatch["paths"] = true
-		selectorsMatch["headers"] = true
+		selectorsMatch["hosts"] = false
+		selectorsMatch["paths"] = false
+		selectorsMatch["headers"] = false
 		wcstr := "*"
-	RangeHosts:
-		for _, s := range u.Selector.Hosts {
-			if s == &wcstr {
-				selectorsMatch["hosts"] = true
-				break RangeHosts
-			}
-			if s != &r.Host {
-				selectorsMatch["hosts"] = false
-				break RangeHosts
-			}
-		}
-	RangePaths:
-		for _, s := range u.Selector.Paths {
-			if s == &wcstr {
-				selectorsMatch["paths"] = true
-				break RangePaths
-			}
-			if s != &r.URL.Path {
-				selectorsMatch["paths"] = false
-				break RangePaths
-			}
-		}
-	RangeHeaders:
-		for k, v := range *u.Selector.Headers {
-			if r.Header.Get(k) != v && v != "*" {
-				selectorsMatch["headers"] = false
-				break RangeHeaders
+		if len(u.Selector.Hosts) == 0 {
+			ll.Debug("No hosts specified")
+			selectorsMatch["hosts"] = true
+		} else {
+		RangeHosts:
+			for _, s := range u.Selector.Hosts {
+				ll.Debugf("Checking host %s against %s", *s, r.Host)
+				if *s == wcstr {
+					ll.Debug("Wildcard host match")
+					selectorsMatch["hosts"] = true
+					break RangeHosts
+				}
+				if *s != r.Host {
+					ll.Debug("Host mismatch")
+					selectorsMatch["hosts"] = false
+					break RangeHosts
+				} else if strings.Contains(*s, "*") && strings.HasSuffix(r.Host, strings.ReplaceAll(*s, "*", "")) {
+					ll.Debug("Host wildcard prefix match")
+					selectorsMatch["hosts"] = true
+				} else {
+					ll.Debug("Host match")
+					selectorsMatch["hosts"] = true
+				}
 			}
 		}
-	RangeSelectors:
-		for _, v := range selectorsMatch {
-			if !v {
-				break RangeSelectors
+		ll.Debugf("Hosts match: %v", selectorsMatch["hosts"])
+		if len(u.Selector.Paths) == 0 {
+			ll.Debug("No paths specified")
+			selectorsMatch["paths"] = true
+		} else {
+		RangePaths:
+			for _, s := range u.Selector.Paths {
+				ll.Debugf("Checking path %s against %s", *s, r.URL.Path)
+				if *s == wcstr {
+					ll.Debug("Wildcard path match")
+					selectorsMatch["paths"] = true
+					break RangePaths
+				}
+				if s != &r.URL.Path {
+					ll.Debug("Path mismatch")
+					selectorsMatch["paths"] = false
+					break RangePaths
+				} else if strings.Contains(*s, "*") && strings.HasSuffix(r.URL.Path, strings.ReplaceAll(*s, "*", "")) {
+					ll.Debug("Path wildcard prefix match")
+					selectorsMatch["paths"] = true
+				} else {
+					ll.Debug("Path match")
+					selectorsMatch["paths"] = true
+				}
 			}
 		}
-		l.WithFields(log.Fields{
+		ll.Debugf("Paths match: %v", selectorsMatch["paths"])
+		if len(*u.Selector.Headers) == 0 {
+			ll.Debug("No headers specified, skipping header checks")
+			selectorsMatch["headers"] = true
+		} else {
+		RangeHeaders:
+			for k, v := range *u.Selector.Headers {
+				ll.Debugf("Checking header %s: %s", k, v)
+				if r.Header.Get(k) != v && v != "*" {
+					ll.Debug("Header mismatch")
+					selectorsMatch["headers"] = true
+					break RangeHeaders
+				} else if r.Header.Get(k) != v && v == "*" {
+					ll.Debug("Header wildcard match")
+					selectorsMatch["headers"] = true
+				} else if strings.Contains(v, "*") && strings.HasSuffix(r.Header.Get(k), strings.ReplaceAll(v, "*", "")) {
+					ll.Debug("Header wildcard prefix match")
+					selectorsMatch["headers"] = true
+				} else if r.Header.Get(k) == v {
+					ll.Debug("Header match")
+					selectorsMatch["headers"] = true
+				}
+			}
+			ll.Debugf("Headers match: %v", selectorsMatch["headers"])
+		}
+		ll = l.WithFields(log.Fields{
 			"selectorsMatch": selectorsMatch,
 			"endpoint":       *u.Endpoint,
-		}).Debug("Selectors match")
+		})
+		ll.Debug("check selectors")
+		for _, v := range selectorsMatch {
+			if !v {
+				continue RangeUpstreams
+			}
+		}
+		ll.Debug("Selectors match")
 		return &u, nil
 	}
 	l.Error("No upstreams matched, using default")
