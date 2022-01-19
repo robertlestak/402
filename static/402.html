@@ -65,6 +65,9 @@
                 You will be automatically redirected when payment is received. 
                 <br>
                 Please do not leave this page while waiting for payment to be confirmed.
+                <br>
+                <br>
+                <span><small id='last-checked'></small></span>
             </div>
 
     </div>
@@ -102,6 +105,15 @@
         ws.send(JSON.stringify(req));
     }
 
+    function handleMessageData(data) {
+        console.log("message", data)
+        if (data.message.indexOf("watching for txs:") !== -1) {
+            var lastCheckTime = data.message.split(":")[1];
+            document.querySelector("#last-checked").innerHTML = "Last checked: " + new Date(lastCheckTime * 1000).toLocaleString();
+            return;
+        }
+    }
+
     function handleMessage (e) {
             console.log("socket message", e.data)
             var data = JSON.parse(e.data)
@@ -120,7 +132,7 @@
                     console.log("payment request", data)
                     break;
                 case "message":
-                    console.log("message", data)
+                    handleMessageData(data)
                     break;
                 case "error":
                     console.log("error", data)

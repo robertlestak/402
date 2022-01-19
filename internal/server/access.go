@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -170,7 +171,12 @@ func handleAddressCheck(id string, message *wsMessage) error {
 	go func() {
 		for {
 			time.Sleep(time.Second * 5)
-			if err := conn.WriteJSON(wsMessage{Data: meta.Payment.Requests, Message: "watching for txs", Type: "message"}); err != nil {
+			mess := &wsMessage{
+				Data:    meta.Payment.Requests,
+				Message: "watching for txs: " + strconv.Itoa(int(time.Now().Unix())),
+				Type:    "message",
+			}
+			if err := conn.WriteJSON(mess); err != nil {
 				l.Println("write:", err)
 				return
 			}
