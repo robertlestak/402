@@ -200,6 +200,72 @@ func (p *Payment) ValidateAPI() (Tx, error) {
 	return Tx{}, errors.New("no valid tx found")
 }
 
+// ValidateAPI validates the payment request against the blockchain through
+// a network call to a blockchain index API. Since we don't know the end user's sending address
+// and we are not receiving the txid like we are in the case of the parent payment validation API,
+// this function is validating that the address has receieved the requested amount. Therefore this assumes
+// that unique addresses will be used for each transaction.
+func (p *PaymentRequest) ValidateAPI() (Tx, error) {
+	l := log.WithFields(log.Fields{
+		"action":  "PaymentRequest.ValidateAPI",
+		"payment": p,
+	})
+	var tx Tx
+	var txs []Tx
+	l.Debug("start")
+	if p.Network == "" {
+		l.Error("network is empty")
+		return tx, errors.New("network is empty")
+	}
+	c := &http.Client{}
+	req, err := http.NewRequest("GET", os.Getenv("PAYMENT_VALIDATE_API")+"/address/received", nil)
+	if err != nil {
+		l.WithError(err).Error("Failed to create request")
+		return tx, err
+	}
+	q := req.URL.Query()
+	q.Add("address", p.Address)
+	q.Add("chain", p.Network)
+	req.URL.RawQuery = q.Encode()
+	resp, err := c.Do(req)
+	if err != nil {
+		l.WithError(err).Error("Failed to send request")
+		return tx, err
+	}
+	l.WithField("status", resp.StatusCode).Debug("Response status")
+	if resp.StatusCode != http.StatusOK {
+		l.WithField("status", resp.StatusCode).Error("Failed to validate tx")
+		return tx, errors.New("failed to validate tx")
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&txs); err != nil {
+		l.WithError(err).Error("Failed to decode response")
+		return tx, err
+	}
+	l = l.WithField("txs", len(txs))
+	for _, tx := range txs {
+		if tx.Status != 1 {
+			l.Error("txid is not valid")
+			return tx, errors.New("txid is not valid")
+		} else if tx.Status == 1 {
+			l.WithField("tx", tx).Debug("Tx is a valid tx")
+			l = l.WithFields(log.Fields{
+				"tx":          tx,
+				"network":     p.Network,
+				"address":     p.Address,
+				"tx.Value":    tx.Value,
+				"reqs.Amount": p.Amount,
+			})
+			l.Debug("check")
+			if p.Address == tx.ToAddr && tx.Value >= p.Amount {
+				l.Debug("Tx is valid, and to address is valid")
+				return tx, nil
+			}
+		}
+	}
+	l.Debug("no valid tx found")
+	return Tx{}, errors.New("no valid tx found")
+}
+
 // Validate both validates a payment and saves the data to prevent double validation
 // should probably rename to be more descriptive
 func (p *Payment) Validate() error {

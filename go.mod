@@ -7,13 +7,13 @@ require (
 	github.com/ethereum/go-ethereum v1.10.15
 	github.com/go-redis/redis v6.15.9+incompatible
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/google/uuid v1.1.5
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/vault/api v1.3.1
 	github.com/lestrrat-go/jwx v1.2.17
 	github.com/rs/cors v1.7.0
 	github.com/sirupsen/logrus v1.8.1
-	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/postgres v1.2.3
 	gorm.io/gorm v1.22.5
 )

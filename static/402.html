@@ -52,20 +52,21 @@
                     Amount: {{.Amount}}
                 </div>
                 <div class='payment-request--network'>
-                    Network: {{.Network}}
+                    Network: <span class='network-name'>{{.Network}}</span>
                 </div>
                 <div class='payment-request--address'>
-                    Address: {{.Address}}
+                    Address: <span class='payment-request--address-item'>{{.Address}}</span>
                 </div>
             </div>
         {{ end }}
 
-        <h3>Payment Complete</h3>
-        <input type="text" id="payment-complete-txid" placeholder="txid">
-        <br>
-        <input type="text" id="payment-complete-network" placeholder="network">
-        <br>
-        <button id="payment-complete-button">Payment Complete</button>
+        <br><br>
+            <div>
+                You will be automatically redirected when payment is received. 
+                <br>
+                Please do not leave this page while waiting for payment to be confirmed.
+            </div>
+
     </div>
 
 </div>
@@ -73,40 +74,85 @@
 <script>
     var ws;
 (function() {
-    var wsUrl = "{{.WSURL}}";
-    if (window.WebSocket === undefined) {
-        // TODO: fallback to polling
-        return;
-    } else {
-        ws = initWS();
+    function ping() {
+        var ping = {
+            "type": "ping"
+        };
+        console.log("pinging");
+        ws.send(JSON.stringify(ping));
+    }
+
+    function handleAuth(data) {
+        let params = new URLSearchParams(window.location.search); 
+        let resource = params.get("resource")
+        setCookies(data.token, resource)
+            .then(function() {
+                window.location.reload()
+            })
+    }
+
+    function checkAddresses() {
+        var req = {
+            type: "check",
+            payment: {
+                encrypted_meta: "{{.Meta.Payment.EncryptedMeta}}",
+                meta_hash: "{{.Meta.Payment.MetaHash}}"
+            }
+        }
+        ws.send(JSON.stringify(req));
+    }
+
+    function handleMessage (e) {
+            console.log("socket message", e.data)
+            var data = JSON.parse(e.data)
+            if (data.error) {
+                console.log("error", data.error)
+            }
+            switch (data.type) {
+                case "ping":
+                    console.log("ping")
+                    break;
+                case "auth":
+                    console.log("payment complete", data)
+                    handleAuth(data)
+                    break;
+                case "payment-request":
+                    console.log("payment request", data)
+                    break;
+                case "message":
+                    console.log("message", data)
+                    break;
+                case "error":
+                    console.log("error", data)
+                    break;
+                default:
+                    console.log("unknown message type", data)
+            }
     }
 
     function initWS() {
         var socket = new WebSocket(wsUrl)
         socket.onopen = function() {
             console.log("socket open")
+            checkAddresses()
         };
-        socket.onmessage = function (e) {
-            console.log("socket message", e.data)
-            var data = JSON.parse(e.data)
-            if (data.error) {
-                console.log("error", data.error)
-            } else if (data.type == "auth") {
-                // payment validated
-                // this is probably not the best way to do this
-                let params = new URLSearchParams(window.location.search); 
-                let resource = params.get("resource")
-                setCookies(data.token, resource)
-                    .then(function() {
-                        window.location.reload()
-                    })
-            }
-        }
+        socket.onmessage = handleMessage
         socket.onclose = function () {
             console.log("socket closed")
         }
         return socket;
     }
+    var wsUrl = "{{.WSURL}}";
+    function main() {
+        if (window.WebSocket === undefined) {
+        // TODO: fallback to polling
+            return;
+        } else {
+            ws = initWS();
+        }
+        //setInterval(ping, 5000)
+    }
+    main()
 })()
 
 function setCookies(token, resource) {
@@ -118,21 +164,6 @@ function setCookies(token, resource) {
         document.cookie = "402_token_"+cleanBase64+"=" + token + "; path=/";
         resolve(true)
     });
-}
-
-function paymentComplete(txid, network) {
-    var data = {
-        type: "payment",
-        payment: {
-            txid: txid,
-            network: network,
-            encrypted_meta: "{{.Meta.Payment.EncryptedMeta}}",
-            meta_hash: "{{.Meta.Payment.MetaHash}}",
-            tenant: "{{.Meta.Payment.Tenant}}",
-        }
-    }
-    ws.send(JSON.stringify(data))
-    // show a loading indicator while we wait for payment to clear
 }
 
 function manualAuth() {
@@ -148,12 +179,6 @@ function manualAuth() {
     ws.send(JSON.stringify(data))
     // show a loading indicator while we wait for payment to clear
 }
-
-document.querySelector('#payment-complete-button').addEventListener('click', function() {
-    var txid = document.querySelector('#payment-complete-txid').value
-    var network = document.querySelector('#payment-complete-network').value
-    paymentComplete(txid, network)
-})
 </script>
 
 {{ if .Meta.Customization.JS }}

@@ -1,8 +1,6 @@
 package pubsub
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -50,127 +48,119 @@ func Init() error {
 	return nil
 }
 
-// AddJob adds a job to the queue
-func AddJob(txid string, network string, encryptedMeta string, metaHash string) error {
-	key := jobsPrefix + network
+// AddAddressJob adds a job to the queue
+func AddAddressJob(requestKey string, address string, network string, encryptedMeta string, metaHash string) error {
+	key := jobsPrefix + requestKey
 	l := log.WithFields(log.Fields{
-		"package":  "pubsub",
-		"method":   "AddJob",
-		"txid":     txid,
-		"network":  network,
-		"key":      key,
-		"metaHash": metaHash,
+		"package":    "pubsub",
+		"method":     "AddJob",
+		"txid":       address,
+		"network":    network,
+		"key":        key,
+		"requestKey": requestKey,
+		"metaHash":   metaHash,
 	})
 	l.Info("Adding job")
 	data := encryptedMeta + ":" + metaHash
-	return Client.HSet(key, txid, data).Err()
+	if serr := Client.HSet(key, network+":"+address, data).Err(); serr != nil {
+		l.Error("Failed to add job")
+		return serr
+	}
+	Client.Expire(key, DefaultExpiration)
+	return nil
 }
 
-// PublishComplete publishes the job complete and removes it from the queue
-func PublishComplete(txid string, network string) error {
-	key := cachePrefix + network + JobPubSubCompleteNameSuffix
+func DelAddressJobs(requestKey string) error {
+	key := jobsPrefix + requestKey
+	l := log.WithFields(log.Fields{
+		"package":    "pubsub",
+		"method":     "DelAddressJobs",
+		"requestKey": requestKey,
+		"key":        key,
+	})
+	l.Info("Deleting job")
+	return Client.Del(key).Err()
+}
+
+func ExpireAddressJobs(requestKey string, exp time.Duration) error {
+	key := jobsPrefix + requestKey
+	l := log.WithFields(log.Fields{
+		"package":    "pubsub",
+		"method":     "DelAddressJobs",
+		"requestKey": requestKey,
+		"key":        key,
+	})
+	l.Info("Deleting job")
+	return Client.Expire(key, exp).Err()
+}
+
+// PublishAddressComplete publishes the job complete and removes it from the queue
+func PublishAddressComplete(requestKey string, address string, network string) error {
+	key := cachePrefix + requestKey + JobPubSubCompleteNameSuffix
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",
 		"method":  "PublishComplete",
-		"txid":    txid,
+		"address": address,
 		"network": network,
 		"key":     key,
 	})
 	l.Info("Publishing complete")
-	Client.HDel(jobsPrefix+network, txid)
-	return Client.Publish(key, txid).Err()
+	Client.Del(jobsPrefix + requestKey)
+	return Client.Publish(key, address).Err()
 }
 
-// PublishError publishes the job error and depending on the error type,
+// PublishAddressError publishes the job error and depending on the error type,
 // it can be removed from the queue or left to be retried later
-func PublishError(txid string, network string, err string, remove bool) error {
-	key := cachePrefix + network + JobPubSubCompleteNameSuffix
+func PublishAddressError(requestKey string, address string, network string, err string, remove bool) error {
+	key := cachePrefix + requestKey + JobPubSubCompleteNameSuffix
 	l := log.WithFields(log.Fields{
-		"package": "pubsub",
-		"method":  "PublishError",
-		"txid":    txid,
-		"network": network,
-		"key":     key,
-		"err":     err,
-		"remove":  remove,
+		"package":    "pubsub",
+		"method":     "PublishError",
+		"address":    address,
+		"network":    network,
+		"key":        key,
+		"err":        err,
+		"remove":     remove,
+		"requestKey": requestKey,
 	})
 	l.Info("Publishing error")
 	if remove {
 		l.Info("Removing job")
-		Client.HDel(jobsPrefix+network, txid)
+		Client.HDel(jobsPrefix+network, address)
 	} else {
 		l.Info("Leaving job")
 	}
-	return Client.Publish(key, txid+":"+err).Err()
+	return Client.Publish(key, "error:"+err).Err()
 }
 
 // JobCompleteSubscriber returns a subscriber for the job complete channel
-func JobCompleteSubscriber(network string) *redis.PubSub {
-	key := cachePrefix + network + JobPubSubCompleteNameSuffix
+func JobCompleteSubscriber(requestKey string) *redis.PubSub {
+	key := cachePrefix + requestKey + JobPubSubCompleteNameSuffix
 	l := log.WithFields(log.Fields{
-		"package": "pubsub",
-		"method":  "JobCompleteSubscriber",
-		"network": network,
-		"key":     key,
+		"package":    "pubsub",
+		"method":     "JobCompleteSubscriber",
+		"requestKey": requestKey,
+		"key":        key,
 	})
 	l.Info("Subscribing to job complete")
 	subscriber := Client.Subscribe(key)
 	return subscriber
 }
 
-// JobCompleteNow will wait for the job to be completed
-// if either the context is canceled or the timeout is exceeded, it will return
-func JobCompleteNow(ctx context.Context, txid string, network string, timeout time.Duration) (string, error) {
-	l := log.WithFields(log.Fields{
-		"package": "pubsub",
-		"method":  "JobCompleteNow",
-		"txid":    txid,
-		"network": network,
-	})
-	l.Info("Job complete")
-
-	subscriber := JobCompleteSubscriber(network)
-
-	for {
-		msg, err := subscriber.ReceiveMessage()
-		if err != nil {
-			l.Error(err)
-			return "", err
-		}
-		l.Infof("Got message: %s", msg.Payload)
-
-		if strings.Contains(msg.Payload, txid) && strings.Contains(msg.Payload, ":") {
-			parts := strings.Split(msg.Payload, ":")
-			return "", errors.New(parts[1])
-		} else if strings.Contains(msg.Payload, txid) {
-			return msg.Payload, nil
-		}
-		select {
-		case <-ctx.Done():
-			l.Info("Context done")
-			return "", nil
-		case <-time.After(timeout):
-			l.Info("Timeout")
-			return "", errors.New("timeout")
-		default:
-			continue
-		}
-	}
-}
-
 // GetEncryptedMeta retrieves the encrypted meta object from the cache
 // encrypted meta schema is stored as "encryptedMeta:metaHash" where
 // encryptedMeta is the encrypted meta object and metaHash is the hash of the encrypted meta + recipients + secret
-func GetEncryptedMeta(txid string, network string) (string, error) {
+func GetEncryptedMeta(requestKey string, address string, network string) (string, error) {
 	l := log.WithFields(log.Fields{
-		"package": "pubsub",
-		"method":  "GetEncryptedMeta",
-		"txid":    txid,
-		"network": network,
+		"package":    "pubsub",
+		"method":     "GetEncryptedMeta",
+		"txid":       address,
+		"requestKey": requestKey,
+		"network":    network,
 	})
 	l.Info("Getting encrypted meta")
-	key := jobsPrefix + network
-	return Client.HGet(key, txid).Result()
+	key := jobsPrefix + requestKey
+	return Client.HGet(key, network+":"+address).Result()
 }
 
 // removableError checks the error and returns true
@@ -198,7 +188,7 @@ func removableError(err error) bool {
 
 // ActiveJobs finds the currently pending jobs in the queue
 // and passes the job data into the input function fx
-func ActiveJobs(fx func(string, string, string, string) error) error {
+func ActiveJobs(fx func(string, string, string, string, string) error) error {
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",
 		"method":  "ActiveJobs",
@@ -230,10 +220,17 @@ func ActiveJobs(fx func(string, string, string, string) error) error {
 			l.Error("Failed to get block index keys")
 			return scmd.Err()
 		}
-		txs := scmd.Val()
-		for _, t := range txs {
-			l.Infof("check work for %s %s", b, t)
-			emd, derr := GetEncryptedMeta(t, b)
+		netAddrs := scmd.Val()
+		for _, a := range netAddrs {
+			netAddr := strings.Split(a, ":")
+			if len(netAddr) != 2 {
+				l.Error("Invalid network address")
+				continue
+			}
+			network := netAddr[0]
+			address := netAddr[1]
+			l.Infof("check work for %s %s", network, address)
+			emd, derr := GetEncryptedMeta(b, address, network)
 			if derr != nil {
 				l.Error(derr)
 				return derr
@@ -241,16 +238,17 @@ func ActiveJobs(fx func(string, string, string, string) error) error {
 			emds := strings.Split(emd, ":")
 			em := emds[0]
 			mh := emds[1]
-			if err := fx(t, b, em, mh); err != nil {
+
+			if err := fx(b, address, network, em, mh); err != nil {
 				l.Error(err)
-				if cerr := PublishError(t, b, err.Error(), removableError(err)); cerr != nil {
-					l.WithField("txid", t).Error("Failed to publish error")
+				if cerr := PublishAddressError(b, address, network, err.Error(), removableError(err)); cerr != nil {
+					l.WithField("address", a).Error("Failed to publish error")
 					return cerr
 				}
 				return err
 			} else {
-				if cerr := PublishComplete(t, b); cerr != nil {
-					l.WithField("txid", t).Error("Failed to publish complete")
+				if cerr := PublishAddressComplete(b, address, network); cerr != nil {
+					l.WithField("address", a).Error("Failed to publish complete")
 					return cerr
 				}
 			}
@@ -261,7 +259,7 @@ func ActiveJobs(fx func(string, string, string, string) error) error {
 
 // ActiveJobsWorker is a worker that will check for active jobs
 // and execute the input function fx on each job
-func ActiveJobsWorker(fx func(string, string, string, string) error) error {
+func ActiveJobsWorker(fx func(string, string, string, string, string) error) error {
 	l := log.WithFields(log.Fields{
 		"package": "pubsub",
 		"method":  "ActiveJobsWorker",

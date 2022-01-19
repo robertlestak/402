@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/websocket"
@@ -19,28 +22,35 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// wsError contains a JSON error message sent to the client.
-type wsError struct {
-	Error string `json:"error"`
-}
+var (
+	socketClients = make(map[string]*websocket.Conn)
+)
 
 type wsMessage struct {
 	Type    string           `json:"type"`
 	Payment *payment.Payment `json:"payment"`
 	Token   string           `json:"token"`
+	Message string           `json:"message"`
+	Data    interface{}      `json:"data"`
 }
 
-func handleAuth(conn *websocket.Conn, message *wsMessage) error {
+func handleAuth(id string, message *wsMessage) error {
 	l := log.WithFields(log.Fields{
 		"action": "handleAuth",
 	})
 	l.Info("start")
 	defer l.Info("end")
+	var ok bool
+	var conn *websocket.Conn
+	if conn, ok = socketClients[id]; !ok {
+		l.Error("socket not found")
+		return errors.New("socket not found")
+	}
 	var err error
 	token := message.Token
 	if token == "" {
 		l.Info("no token")
-		if err := conn.WriteJSON(wsError{Error: "no token"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "no token"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -51,7 +61,7 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 	_, claims, err = auth.ValidateJWT(token)
 	if err != nil {
 		l.WithError(err).Error("Failed to validate JWT")
-		if err := conn.WriteJSON(wsError{Error: "invalid token"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "invalid token"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -60,7 +70,7 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 	bdata, berr := base64.StdEncoding.DecodeString(payment.EncryptedMeta)
 	if berr != nil {
 		l.Error("base64 decode:", berr)
-		if err := conn.WriteJSON(wsError{Error: "base64 decode error"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "base64 decode error"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -69,7 +79,7 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 	decryptedMeta, derr := auth.DecryptWithPrivateKey(bdata, utils.MessageKeyID())
 	if derr != nil {
 		l.Error("decrypt meta:", derr)
-		if err := conn.WriteJSON(wsError{Error: "decrypt meta"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "decrypt meta"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -79,7 +89,7 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 	err = json.Unmarshal(decryptedMeta, &meta)
 	if err != nil {
 		l.Error("unmarshal meta:", err)
-		if err := conn.WriteJSON(wsError{Error: "unmarshal meta"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "unmarshal meta"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -88,7 +98,7 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 	l.WithField("meta", meta).Debug("Got meta")
 	if claims == nil {
 		l.Info("no claims")
-		if err := conn.WriteJSON(wsError{Error: "no claims"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "no claims"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -96,7 +106,7 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 	}
 	if verr := auth.ValidateClaims(claims, meta.Claims); verr != nil {
 		l.WithError(verr).Error("Failed to validate claims")
-		if err := conn.WriteJSON(wsError{Error: "invalid claims"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "invalid claims"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -107,7 +117,7 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 	token, terr := meta.GenerateToken()
 	if terr != nil {
 		l.Error("generate token:", terr)
-		if err := conn.WriteJSON(wsError{Error: "generate token"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "generate token"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -115,7 +125,7 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 	}
 	if token == "" {
 		l.Error("token is empty")
-		if err := conn.WriteJSON(wsError{Error: "token empty"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "token empty"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -142,53 +152,38 @@ func clientAccessClaims(claims jwt.MapClaims) bool {
 	return false
 }
 
-func handlePayment(conn *websocket.Conn, message *wsMessage) error {
-	var err error
-	l := log.WithFields(log.Fields{
-		"action": "handlePayment",
-	})
-	l.Info("start")
+func handleAddressCheck(id string, message *wsMessage) error {
+	l := log.WithFields(log.Fields{"func": "handleAddressCheck"})
+	l.Info("handleAddressCheck")
+	l.Info(message)
+	var ok bool
+	var conn *websocket.Conn
+	if conn, ok = socketClients[id]; !ok {
+		l.Error("socket not found")
+		return errors.New("socket not found")
+	}
+	if message.Payment.EncryptedMeta == "" {
+		l.Error("encrypted meta is empty")
+		if err := conn.WriteJSON(wsMessage{Message: "encrypted meta empty"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return nil
+	}
+	if message.Payment.MetaHash == "" {
+		l.Error("meta hash is empty")
+		if err := conn.WriteJSON(wsMessage{Message: "meta hash empty"}); err != nil {
+			l.Println("write:", err)
+			return err
+		}
+		return nil
+	}
 	payment := message.Payment
-	if payment.Txid == "" {
-		l.Error("txid is empty")
-		if err := conn.WriteJSON(wsError{Error: "txid empty"}); err != nil {
-			l.Println("write:", err)
-			return err
-		}
-		return nil
-	}
-	if payment.Network == "" {
-		l.Error("network is empty")
-		if err := conn.WriteJSON(wsError{Error: "network empty"}); err != nil {
-			l.Println("write:", err)
-			return err
-		}
-		return nil
-	}
-	if payment.MetaHash == "" {
-		l.Error("metaHash is empty")
-		if err := conn.WriteJSON(wsError{Error: "metaHash empty"}); err != nil {
-			l.Println("write:", err)
-			return err
-		}
-		return nil
-	}
-	if payment.Tenant == "" {
-		l.Info("tenant is empty, using DEFAULT_TENANT")
-		payment.Tenant = os.Getenv("DEFAULT_TENANT")
-	}
-	if !utils.NetworkSupported(payment.Network) {
-		l.Error("network not supported")
-		if err := conn.WriteJSON(wsError{Error: "network not supported"}); err != nil {
-			l.Println("write:", err)
-			return err
-		}
-		return nil
-	}
+	var err error
 	bdata, berr := base64.StdEncoding.DecodeString(payment.EncryptedMeta)
 	if berr != nil {
 		l.Error("base64 decode:", berr)
-		if err := conn.WriteJSON(wsError{Error: "base64 decode error"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "base64 decode error"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -197,7 +192,7 @@ func handlePayment(conn *websocket.Conn, message *wsMessage) error {
 	decryptedMeta, derr := auth.DecryptWithPrivateKey(bdata, utils.MessageKeyID())
 	if derr != nil {
 		l.Error("decrypt meta:", derr)
-		if err := conn.WriteJSON(wsError{Error: "decrypt meta"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "decrypt meta"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
@@ -207,17 +202,58 @@ func handlePayment(conn *websocket.Conn, message *wsMessage) error {
 	err = json.Unmarshal(decryptedMeta, &meta)
 	if err != nil {
 		l.Error("unmarshal meta:", err)
-		if err := conn.WriteJSON(wsError{Error: "unmarshal meta"}); err != nil {
+		if err := conn.WriteJSON(wsMessage{Message: "unmarshal meta"}); err != nil {
 			l.Println("write:", err)
 			return err
 		}
 		return nil
 	}
-	pubsub.AddJob(payment.Txid, payment.Network, payment.EncryptedMeta, payment.MetaHash)
-	subscriber := pubsub.JobCompleteSubscriber(payment.Network)
+	l.Info("meta:", meta)
+	if payment.Tenant == "" {
+		l.Info("tenant is empty, using DEFAULT_TENANT")
+		payment.Tenant = os.Getenv("DEFAULT_TENANT")
+	}
+	for _, pr := range meta.Payment.Requests {
+		if pr.Address == "" {
+			l.Error("address is empty")
+			if err := conn.WriteJSON(wsMessage{Message: "address empty"}); err != nil {
+				l.Println("write:", err)
+				return err
+			}
+			return nil
+		}
+		if pr.Amount == 0 {
+			l.Error("amount is empty")
+			if err := conn.WriteJSON(wsMessage{Message: "amount empty"}); err != nil {
+				l.Println("write:", err)
+				return err
+			}
+			return nil
+		}
+		if jerr := pubsub.AddAddressJob(id, pr.Address, pr.Network, payment.EncryptedMeta, payment.MetaHash); jerr != nil {
+			l.Error("add address job:", jerr)
+			if err := conn.WriteJSON(wsMessage{Message: "add address job"}); err != nil {
+				l.Println("write:", err)
+				return err
+			}
+			return nil
+		}
+	}
+
 	go func() {
 		for {
-			l.Infof("Waiting for txid: %s", payment.Txid)
+			time.Sleep(time.Second * 5)
+			if err := conn.WriteJSON(wsMessage{Data: meta.Payment.Requests, Message: "watching for txs", Type: "message"}); err != nil {
+				l.Println("write:", err)
+				return
+			}
+		}
+	}()
+	// TODO REFACTOR
+	subscriber := pubsub.JobCompleteSubscriber(id)
+	go func() {
+		for {
+			l.Infof("Waiting for completion of payment: %s", payment)
 			msg, err := subscriber.ReceiveMessage()
 			if err != nil {
 				l.Error(err)
@@ -225,63 +261,65 @@ func handlePayment(conn *websocket.Conn, message *wsMessage) error {
 			}
 			l.Infof("Got message: %s", msg.Payload)
 
-			if strings.Contains(msg.Payload, payment.Txid) && strings.Contains(msg.Payload, ":") {
+			if strings.HasPrefix(msg.Payload, "error:") {
 				parts := strings.Split(msg.Payload, ":")
-				if err := conn.WriteJSON(wsError{Error: parts[1]}); err != nil {
+				if err := conn.WriteJSON(wsMessage{Message: strings.Join(parts[:len(parts)-1], ":")}); err != nil {
 					l.Println("write:", err)
 					return
 				}
-				return
-			} else if strings.Contains(msg.Payload, payment.Txid) {
-				meta.Payment = payment
-				if !clientAccessClaims(meta.Claims) {
-					us := &upstream.Upstream{}
-					us.ID = meta.UpstreamID
-					if err := us.GetByID(); err != nil {
-						l.Error(err)
-						return
-					}
-					if verr := hpay.ValidateRequestedClaims(meta.Claims, us); verr != nil {
-						l.WithError(verr).Error("Failed to validate claims")
-						if err := conn.WriteJSON(wsError{Error: "Failed to validate claims"}); err != nil {
-							l.Println("write:", err)
-							return
-						}
-						return
-					}
-				}
-				token, terr := meta.GenerateToken()
-				if terr != nil {
-					l.Error("generate token:", terr)
-					if err := conn.WriteJSON(wsError{Error: "generate token"}); err != nil {
-						l.Println("write:", err)
-						return
-					}
-					return
-				}
-				if token == "" {
-					l.Error("token is empty")
-					if err := conn.WriteJSON(wsError{Error: "token empty"}); err != nil {
-						l.Println("write:", err)
-						return
-					}
-					return
-				}
-				mess := &wsMessage{
-					Type:    "auth",
-					Token:   token,
-					Payment: meta.Payment,
-				}
-				err = conn.WriteJSON(mess)
-				if err != nil {
-					l.Println("write:", err)
-					return
-				}
-				l.Info("job complete")
 				return
 			}
+			meta.Payment = payment
+			if !clientAccessClaims(meta.Claims) {
+				us := &upstream.Upstream{}
+				us.ID = meta.UpstreamID
+				if err := us.GetByID(); err != nil {
+					l.Error(err)
+					return
+				}
+				if verr := hpay.ValidateRequestedClaims(meta.Claims, us); verr != nil {
+					l.WithError(verr).Error("Failed to validate claims")
+					if err := conn.WriteJSON(wsMessage{Message: "Failed to validate claims"}); err != nil {
+						l.Println("write:", err)
+						return
+					}
+					return
+				}
+				cleanupSocket(id)
+			}
+			token, terr := meta.GenerateToken()
+			if terr != nil {
+				l.Error("generate token:", terr)
+				if err := conn.WriteJSON(wsMessage{Message: "generate token"}); err != nil {
+					l.Println("write:", err)
+					return
+				}
+				return
+			}
+			if token == "" {
+				l.Error("token is empty")
+				if err := conn.WriteJSON(wsMessage{Message: "token empty"}); err != nil {
+					l.Println("write:", err)
+					return
+				}
+				return
+			}
+			mess := &wsMessage{
+				Type:    "auth",
+				Token:   token,
+				Payment: meta.Payment,
+			}
+			err = conn.WriteJSON(mess)
+			if err != nil {
+				l.Println("write:", err)
+				return
+			}
+			cleanupSocket(id)
+			l.Info("job complete")
+			return
 		}
 	}()
+	l.Info("end")
 	return nil
 }
 
@@ -289,11 +327,21 @@ func handlePayment(conn *websocket.Conn, message *wsMessage) error {
 // it is a monolith e2e function (should be refactored) that receives a transaction
 // from the client, validates the tx against the specified chain, and sends the
 // client their access token for succesful payment
-func handlePaymentSocket(conn *websocket.Conn) error {
+func handlePaymentSocket(id string) error {
 	l := log.WithFields(log.Fields{
 		"action": "handlePaymentSocket",
 	})
 	l.Info("start")
+	if id == "" {
+		l.Error("id is empty")
+		return errors.New("id is empty")
+	}
+	var ok bool
+	var conn *websocket.Conn
+	if conn, ok = socketClients[id]; !ok {
+		l.Error("socket not found")
+		return errors.New("socket not found")
+	}
 	message := &wsMessage{}
 	err := conn.ReadJSON(&message)
 	if err != nil {
@@ -304,18 +352,37 @@ func handlePaymentSocket(conn *websocket.Conn) error {
 	switch message.Type {
 	case "auth":
 		l.Info("auth")
-		if err = handleAuth(conn, message); err != nil {
+		if err = handleAuth(id, message); err != nil {
 			l.Println("handle auth:", err)
 			return err
 		}
-	case "payment":
-		l.Info("payment")
-		if herr := handlePayment(conn, message); herr != nil {
-			l.Error(herr)
-			return herr
+	case "check":
+		l.Info("check")
+		if err = handleAddressCheck(id, message); err != nil {
+			l.Println("handle check:", err)
+			return err
+		}
+	case "ping":
+		l.Info("ping")
+		if err = conn.WriteJSON(wsMessage{Type: "pong"}); err != nil {
+			l.Println("write:", err)
+			return err
 		}
 	}
 	return nil
+}
+
+func cleanupSocket(id string) {
+	l := log.WithFields(log.Fields{
+		"action": "cleanupSocket",
+	})
+	l.Info("start")
+	if id == "" {
+		l.Error("id is empty")
+		return
+	}
+	delete(socketClients, id)
+	pubsub.ExpireAddressJobs(id, time.Minute*1)
 }
 
 // wsHandler is a http handler for websocket connections
@@ -332,10 +399,18 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l.Info("handle socket")
-	defer conn.Close()
+	cid := uuid.New().String()
+	l.Info("new connection id:", cid)
+	socketClients[cid] = conn
+	defer func() {
+		l.Info("remove connection id:", cid)
+		delete(socketClients, cid)
+		conn.Close()
+	}()
 	for {
-		if err := handlePaymentSocket(conn); err != nil {
+		if err := handlePaymentSocket(cid); err != nil {
 			l.WithError(err).Error("Failed to handle websocket")
+			cleanupSocket(cid)
 			break
 		}
 	}

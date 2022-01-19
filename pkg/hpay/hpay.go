@@ -307,12 +307,13 @@ func (m *Meta) ValidatePayment() error {
 // txid provided against the requested network. Once the txid is validated, it will be checked to ensure that
 // it is to an address in the payment request and has not been recieved before. If all of these checks pass,
 // the payment request will be validated.
-func ValidateEncryptedPayment(txid string, network string, encrypted string, metaHash string) error {
+func ValidateEncryptedPayment(requestId string, address string, network string, encrypted string, metaHash string) error {
 	l := log.WithFields(log.Fields{
-		"action":   "ValidateEncryptedPayment",
-		"txid":     txid,
-		"network":  network,
-		"metaHash": metaHash,
+		"action":    "ValidateEncryptedPayment",
+		"address":   address,
+		"network":   network,
+		"metaHash":  metaHash,
+		"requestId": requestId,
 	})
 	l.Debug("start")
 	defer l.Debug("end")
@@ -336,8 +337,23 @@ func ValidateEncryptedPayment(txid string, network string, encrypted string, met
 		l.WithError(err).Error("Failed to unmarshal")
 		return err
 	}
-	meta.Payment.Txid = txid
-	meta.Payment.Network = network
+	// check address - if success, set txid and validate payment
+
+	for _, req := range meta.Payment.Requests {
+		if req.Address == address {
+			tx, err := req.ValidateAPI()
+			if err != nil {
+				l.WithError(err).Error("Failed to validate payment")
+				return err
+			}
+			meta.Payment.Txid = tx.Hash
+			meta.Payment.Network = network
+		}
+	}
+	if meta.Payment.Txid == "" {
+		l.Debug("end")
+		return errors.New("txid not found")
+	}
 	meta.Payment.MetaHash = metaHash
 	meta.Payment.EncryptedMeta = encrypted
 	l.WithField("meta", meta).Debug("Unmarshaled")
