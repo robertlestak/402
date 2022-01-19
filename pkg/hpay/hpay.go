@@ -122,26 +122,14 @@ func parseMeta(h map[string]string) (*Meta, error) {
 	return &metaObj, nil
 }
 
-// HandleRequest is a monolith function (should be refactored) that handles an e2e request
-// from a client. This will validate their current auth token (if provided) and if valid, will
-// return 200 indicating the user has access to the resource. If the token is invalid, it will
-// retrieve the upstream for the request, make a 402 head/meta request to retrieve the metadata,
-// encrypt this request with the provided key, and return the [402 to the cllient
-func HandleRequest(w http.ResponseWriter, r *http.Request) {
+func requestClaims(r *http.Request, resource string) (jwt.MapClaims, error) {
 	l := log.WithFields(log.Fields{
-		"action": "HandleRequest",
+		"action": "requestClaims",
 	})
 	l.Debug("start")
 	defer l.Debug("end")
 	var claims jwt.MapClaims
 	var err error
-	resource := r.FormValue("resource")
-	if resource == "" {
-		l.Error("no resource")
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "no resource")
-		return
-	}
 	authTokens := utils.AuthTokens(r)
 	if len(authTokens) == 0 {
 		l.Info("no auth token")
@@ -166,6 +154,34 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 			}
 			l.WithField("claims", claims).Debug("JWT validated")
 		}
+	}
+	return claims, err
+}
+
+// HandleRequest is a monolith function (should be refactored) that handles an e2e request
+// from a client. This will validate their current auth token (if provided) and if valid, will
+// return 200 indicating the user has access to the resource. If the token is invalid, it will
+// retrieve the upstream for the request, make a 402 head/meta request to retrieve the metadata,
+// encrypt this request with the provided key, and return the [402 to the cllient
+func HandleRequest(w http.ResponseWriter, r *http.Request) {
+	l := log.WithFields(log.Fields{
+		"action": "HandleRequest",
+	})
+	l.Debug("start")
+	defer l.Debug("end")
+	resource := r.FormValue("resource")
+	if resource == "" {
+		l.Error("no resource")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "no resource")
+		return
+	}
+	claims, err := requestClaims(r, resource)
+	if err != nil {
+		l.WithError(err).Error("Failed to validate JWT")
+		w.WriteHeader(http.StatusUnauthorized)
+		fmt.Fprint(w, http.StatusText(http.StatusUnauthorized))
+		return
 	}
 	us, uerr := upstream.UpstreamForRequest(r)
 	if uerr != nil {
@@ -209,15 +225,13 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	w.WriteHeader(http.StatusPaymentRequired)
 	if meta.Payment.Tenant == "" {
 		meta.Payment.Tenant = os.Getenv("DEFAULT_TENANT")
 		l.WithField("tenant", meta.Payment.Tenant).Debug("No tenant provided, using default")
 	}
 	// loop through payment requests to create addrs if necessary
 	for _, pr := range meta.Payment.Requests {
-		// if site owner has not provided static address, create one
+		// if site owner has not provided static address, create one. This is the recommended approach.
 		if pr.Address == "" && os.Getenv("VAULT_ENABLE") == "true" {
 			newWallet, werr := vault.NewTenantWallet(meta.Payment.Tenant)
 			if werr != nil {
@@ -252,6 +266,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		Meta:  meta,
 		WSURL: os.Getenv("WS_URL"),
 	}
+	w.WriteHeader(http.StatusPaymentRequired)
 	payment.TemplatedPage(w, pageData, "402.html")
 }
 

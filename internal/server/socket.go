@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,7 +17,6 @@ import (
 	"github.com/robertlestak/hpay/pkg/auth"
 	"github.com/robertlestak/hpay/pkg/hpay"
 	"github.com/robertlestak/hpay/pkg/payment"
-	"github.com/robertlestak/hpay/pkg/upstream"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -150,177 +148,6 @@ func clientAccessClaims(claims jwt.MapClaims) bool {
 		return true
 	}
 	return false
-}
-
-func handleAddressCheck(id string, message *wsMessage) error {
-	l := log.WithFields(log.Fields{"func": "handleAddressCheck"})
-	l.Info("handleAddressCheck")
-	l.Info(message)
-	var ok bool
-	var conn *websocket.Conn
-	if conn, ok = socketClients[id]; !ok {
-		l.Error("socket not found")
-		return errors.New("socket not found")
-	}
-	if message.Payment.EncryptedMeta == "" {
-		l.Error("encrypted meta is empty")
-		if err := conn.WriteJSON(wsMessage{Message: "encrypted meta empty"}); err != nil {
-			l.Println("write:", err)
-			return err
-		}
-		return nil
-	}
-	if message.Payment.MetaHash == "" {
-		l.Error("meta hash is empty")
-		if err := conn.WriteJSON(wsMessage{Message: "meta hash empty"}); err != nil {
-			l.Println("write:", err)
-			return err
-		}
-		return nil
-	}
-	payment := message.Payment
-	var err error
-	bdata, berr := base64.StdEncoding.DecodeString(payment.EncryptedMeta)
-	if berr != nil {
-		l.Error("base64 decode:", berr)
-		if err := conn.WriteJSON(wsMessage{Message: "base64 decode error"}); err != nil {
-			l.Println("write:", err)
-			return err
-		}
-		return nil
-	}
-	decryptedMeta, derr := auth.DecryptWithPrivateKey(bdata, utils.MessageKeyID())
-	if derr != nil {
-		l.Error("decrypt meta:", derr)
-		if err := conn.WriteJSON(wsMessage{Message: "decrypt meta"}); err != nil {
-			l.Println("write:", err)
-			return err
-		}
-		return nil
-	}
-	meta := hpay.Meta{}
-	err = json.Unmarshal(decryptedMeta, &meta)
-	if err != nil {
-		l.Error("unmarshal meta:", err)
-		if err := conn.WriteJSON(wsMessage{Message: "unmarshal meta"}); err != nil {
-			l.Println("write:", err)
-			return err
-		}
-		return nil
-	}
-	l.Info("meta:", meta)
-	if payment.Tenant == "" {
-		l.Info("tenant is empty, using DEFAULT_TENANT")
-		payment.Tenant = os.Getenv("DEFAULT_TENANT")
-	}
-	for _, pr := range meta.Payment.Requests {
-		if pr.Address == "" {
-			l.Error("address is empty")
-			if err := conn.WriteJSON(wsMessage{Message: "address empty"}); err != nil {
-				l.Println("write:", err)
-				return err
-			}
-			return nil
-		}
-		if pr.Amount == 0 {
-			l.Error("amount is empty")
-			if err := conn.WriteJSON(wsMessage{Message: "amount empty"}); err != nil {
-				l.Println("write:", err)
-				return err
-			}
-			return nil
-		}
-		if jerr := pubsub.AddAddressJob(id, pr.Address, pr.Network, payment.EncryptedMeta, payment.MetaHash); jerr != nil {
-			l.Error("add address job:", jerr)
-			if err := conn.WriteJSON(wsMessage{Message: "add address job"}); err != nil {
-				l.Println("write:", err)
-				return err
-			}
-			return nil
-		}
-	}
-
-	go func() {
-		for {
-			time.Sleep(time.Second * 5)
-			if err := conn.WriteJSON(wsMessage{Data: meta.Payment.Requests, Message: "watching for txs", Type: "message"}); err != nil {
-				l.Println("write:", err)
-				return
-			}
-		}
-	}()
-	// TODO REFACTOR
-	subscriber := pubsub.JobCompleteSubscriber(id)
-	go func() {
-		for {
-			l.Infof("Waiting for completion of payment: %s", payment)
-			msg, err := subscriber.ReceiveMessage()
-			if err != nil {
-				l.Error(err)
-				return
-			}
-			l.Infof("Got message: %s", msg.Payload)
-
-			if strings.HasPrefix(msg.Payload, "error:") {
-				parts := strings.Split(msg.Payload, ":")
-				if err := conn.WriteJSON(wsMessage{Message: strings.Join(parts[:len(parts)-1], ":")}); err != nil {
-					l.Println("write:", err)
-					return
-				}
-				return
-			}
-			meta.Payment = payment
-			if !clientAccessClaims(meta.Claims) {
-				us := &upstream.Upstream{}
-				us.ID = meta.UpstreamID
-				if err := us.GetByID(); err != nil {
-					l.Error(err)
-					return
-				}
-				if verr := hpay.ValidateRequestedClaims(meta.Claims, us); verr != nil {
-					l.WithError(verr).Error("Failed to validate claims")
-					if err := conn.WriteJSON(wsMessage{Message: "Failed to validate claims"}); err != nil {
-						l.Println("write:", err)
-						return
-					}
-					return
-				}
-				cleanupSocket(id)
-			}
-			token, terr := meta.GenerateToken()
-			if terr != nil {
-				l.Error("generate token:", terr)
-				if err := conn.WriteJSON(wsMessage{Message: "generate token"}); err != nil {
-					l.Println("write:", err)
-					return
-				}
-				return
-			}
-			if token == "" {
-				l.Error("token is empty")
-				if err := conn.WriteJSON(wsMessage{Message: "token empty"}); err != nil {
-					l.Println("write:", err)
-					return
-				}
-				return
-			}
-			mess := &wsMessage{
-				Type:    "auth",
-				Token:   token,
-				Payment: meta.Payment,
-			}
-			err = conn.WriteJSON(mess)
-			if err != nil {
-				l.Println("write:", err)
-				return
-			}
-			cleanupSocket(id)
-			l.Info("job complete")
-			return
-		}
-	}()
-	l.Info("end")
-	return nil
 }
 
 // handlePaymentSocket handles a websocket connection
