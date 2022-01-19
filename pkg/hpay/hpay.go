@@ -59,6 +59,9 @@ func ValidateRequestedClaims(claims jwt.MapClaims, us *upstream.Upstream) error 
 	if _, ok := claims["sub"]; ok {
 		return errors.New("sub claim is protected")
 	}
+	if _, ok := claims["tid"]; ok {
+		return errors.New("tid claim is protected")
+	}
 	return nil
 }
 
@@ -75,6 +78,9 @@ func (m *Meta) GenerateToken() (string, error) {
 	}
 	if _, ok := m.Claims["iss"]; !ok && m.Payment.Tenant != "" {
 		m.Claims["iss"] = m.Payment.Tenant
+	}
+	if _, ok := m.Claims["tid"]; !ok && m.Payment.Tenant != "" {
+		m.Claims["tid"] = m.Payment.Tenant
 	}
 	token, err := auth.GenerateJWT(m.Claims, exp, utils.TokenKeyID())
 	if err != nil {
@@ -228,6 +234,11 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	if meta.Payment.Tenant == "" {
 		meta.Payment.Tenant = os.Getenv("DEFAULT_TENANT")
 		l.WithField("tenant", meta.Payment.Tenant).Debug("No tenant provided, using default")
+	}
+	if tid, ok := claims["tid"]; ok && tid != "" && tid != meta.Payment.Tenant {
+		l.WithField("tenant", meta.Payment.Tenant).Debug("Tenant mismatch")
+		http.Error(w, "Tenant mismatch", http.StatusUnauthorized)
+		return
 	}
 	// loop through payment requests to create addrs if necessary
 	for _, pr := range meta.Payment.Requests {

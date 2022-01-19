@@ -319,7 +319,8 @@ func HandleGenerateNewJWT(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := jwt.MapClaims{
-		"sub": t.Name,
+		"iss": os.Getenv("JWT_ISS"),
+		"tid": t.Name,
 	}
 	jwt, err := auth.GenerateJWT(claims, exp, utils.TokenKeyID())
 	if err != nil {
