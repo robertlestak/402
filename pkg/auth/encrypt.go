@@ -17,7 +17,7 @@ func EncryptWithPublicKey(msg []byte, keyID string) ([]byte, error) {
 	l.Debug("start")
 	defer l.Debug("end")
 	hash := sha512.New()
-	priv, err := GetKey(keyID)
+	priv, err := GetMessageKey(keyID)
 	if err != nil {
 		l.WithError(err).Error("Failed to get key")
 		return nil, err
@@ -39,7 +39,7 @@ func DecryptWithPrivateKey(ciphertext []byte, keyID string) ([]byte, error) {
 	l.Debug("start")
 	defer l.Debug("end")
 	hash := sha512.New()
-	priv, err := GetKey(keyID)
+	priv, err := GetMessageKey(keyID)
 	if err != nil {
 		l.WithError(err).Error("Failed to get key")
 		return nil, err

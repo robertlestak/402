@@ -321,7 +321,7 @@ func HandleGenerateNewJWT(w http.ResponseWriter, r *http.Request) {
 	claims := jwt.MapClaims{
 		"sub": t.Name,
 	}
-	jwt, err := auth.GenerateJWT(claims, exp, utils.KeyID())
+	jwt, err := auth.GenerateJWT(claims, exp, utils.TokenKeyID())
 	if err != nil {
 		l.Error("error generating JWT: ", err)
 		http.Error(w, "error generating JWT", http.StatusInternalServerError)

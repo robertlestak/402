@@ -76,7 +76,7 @@ func (m *Meta) GenerateToken() (string, error) {
 	if _, ok := m.Claims["iss"]; !ok && m.Payment.Tenant != "" {
 		m.Claims["iss"] = m.Payment.Tenant
 	}
-	token, err := auth.GenerateJWT(m.Claims, exp, utils.KeyID())
+	token, err := auth.GenerateJWT(m.Claims, exp, utils.TokenKeyID())
 	if err != nil {
 		l.Error(err)
 		return "", err
@@ -235,7 +235,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to marshal meta", http.StatusInternalServerError)
 		return
 	}
-	em, err := auth.EncryptWithPublicKey(mjson, utils.KeyID())
+	em, err := auth.EncryptWithPublicKey(mjson, utils.MessageKeyID())
 	if err != nil {
 		l.WithError(err).Error("Failed to encrypt meta")
 		http.Error(w, "Failed to encrypt meta", http.StatusInternalServerError)
@@ -267,7 +267,7 @@ func (m *Meta) Decrypt(encrypted string) error {
 		return nil
 	}
 
-	bd, berr := auth.DecryptWithPrivateKey([]byte(encrypted), utils.KeyID())
+	bd, berr := auth.DecryptWithPrivateKey([]byte(encrypted), utils.MessageKeyID())
 	if berr != nil {
 		l.WithError(berr).Error("Failed to decrypt")
 		return berr
@@ -325,7 +325,7 @@ func ValidateEncryptedPayment(txid string, network string, encrypted string, met
 		l.WithError(berr).Error("Failed to decode")
 		return berr
 	}
-	decrypted, err := auth.DecryptWithPrivateKey(bd, utils.KeyID())
+	decrypted, err := auth.DecryptWithPrivateKey(bd, utils.MessageKeyID())
 	if err != nil {
 		l.WithError(err).Error("Failed to decrypt")
 		return err

@@ -107,14 +107,15 @@ Serverless / static sites can enable hpay on a resource by setting `<meta>` tags
 
 ## Encryption
 
-`402` utilizes `RSA` Public/Private key pairs to encrypt payment requests as well as generate JWTs for users. It is recommended to enable more than one private key to enable easier rotation in the future. While not necessary to integrate, `402` also exposes the active `JWKS` to enable additional validation integrations, such as Istio RequestAuthentication.
+`402` utilizes `RSA` Public/Private key pairs to encrypt payment requests as well as generate JWTs for users. It is recommended to enable more than one private key for both to enable easier rotation in the future. While not necessary to integrate, `402` also exposes the active `JWKS` to enable additional validation integrations, such as Istio RequestAuthentication.
 
-Based on the size of your claims, you will need to generate an adequately sized key to sign the payload.
+For the message signing keys, based on the size of your claims, you will need to generate an adequately sized key to sign the payload.
 
 Example key generation:
 
 ```bash
-openssl genrsa -out example.key 8124
+openssl genrsa -out token.key 1024
+openssl genrsa -out message.key 8124
 ```
 
 ### Encrypted Checksum

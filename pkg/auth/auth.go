@@ -18,8 +18,10 @@ import (
 )
 
 var (
-	// SignKeys is a map of key IDs to private keys
-	SignKeys = make(map[string]*rsa.PrivateKey)
+	// TokenSignKeys is a map of key IDs to private keys
+	TokenSignKeys = make(map[string]*rsa.PrivateKey)
+	// MessageSignKeys is a map of key IDs to private keys
+	MessageSignKeys = make(map[string]*rsa.PrivateKey)
 )
 
 // CreateJWKS creates a JWKS document with the current sign keys
@@ -27,7 +29,7 @@ func CreateJWKS() (string, error) {
 	var keys struct {
 		Keys []jwk.Key `json:"keys"`
 	}
-	for k, v := range SignKeys {
+	for k, v := range TokenSignKeys {
 		key, err := jwk.New(v)
 		if err != nil {
 			return "", fmt.Errorf("failed to create symmetric key: %s", err)
@@ -43,13 +45,25 @@ func CreateJWKS() (string, error) {
 	return string(buf), nil
 }
 
-// GetKey returns the key for the given key ID
-func GetKey(id string) (*rsa.PrivateKey, error) {
+// GetTokenKey returns the key for the given key ID
+func GetTokenKey(id string) (*rsa.PrivateKey, error) {
 	l := log.WithFields(log.Fields{
-		"func": "GetKey",
+		"func": "GetTokenKey",
 	})
 	l.Println("start")
-	if key, ok := SignKeys[id]; ok {
+	if key, ok := TokenSignKeys[id]; ok {
+		return key, nil
+	}
+	return nil, fmt.Errorf("key not found: %s", id)
+}
+
+// GetMessageKey returns the key for the given key ID
+func GetMessageKey(id string) (*rsa.PrivateKey, error) {
+	l := log.WithFields(log.Fields{
+		"func": "GetMessageKey",
+	})
+	l.Println("start")
+	if key, ok := MessageSignKeys[id]; ok {
 		return key, nil
 	}
 	return nil, fmt.Errorf("key not found: %s", id)
@@ -72,30 +86,51 @@ func HandleCreateJWKS(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(jwks))
 }
 
+// initKeysFromString initializes the sign keys
+func initKeysFromString(k string) (map[string]*rsa.PrivateKey, error) {
+	l := log.WithFields(log.Fields{
+		"func": "initKeysFromString",
+	})
+	l.Println("start")
+	keys := make(map[string]*rsa.PrivateKey)
+	for _, e := range strings.Split(k, ",") {
+		e = strings.TrimSpace(e)
+		ss := strings.Split(e, "_")
+		if len(ss) != 2 {
+			return keys, errors.New("keys must be in the form of '<name>_<base64_private_key>'")
+		}
+		name := strings.TrimSpace(ss[0])
+		b64key := strings.TrimSpace(ss[1])
+		bd, berr := base64.StdEncoding.DecodeString(b64key)
+		if berr != nil {
+			return keys, fmt.Errorf("failed to decode key: %s", berr.Error())
+		}
+		key, err := jwt.ParseRSAPrivateKeyFromPEM(bd)
+		if err != nil {
+			return keys, err
+		}
+		l.Infof("added key: %s", key.Public())
+		keys[name] = key
+	}
+	return keys, nil
+}
+
 // InitSignKeys initializes the sign keys
 func InitSignKeys() error {
 	l := log.WithFields(log.Fields{
 		"func": "InitSignKeys",
 	})
 	l.Println("start")
-	for _, e := range strings.Split(os.Getenv("JWT_SIGN_KEYS"), ",") {
-		e = strings.TrimSpace(e)
-		ss := strings.Split(e, "_")
-		if len(ss) != 2 {
-			return errors.New("JWT_SIGN_KEYS must be in the form of '<name>_<base64_private_key>'")
-		}
-		name := strings.TrimSpace(ss[0])
-		b64key := strings.TrimSpace(ss[1])
-		bd, berr := base64.StdEncoding.DecodeString(b64key)
-		if berr != nil {
-			return fmt.Errorf("failed to decode key: %s", berr.Error())
-		}
-		key, err := jwt.ParseRSAPrivateKeyFromPEM(bd)
-		if err != nil {
-			return err
-		}
-		l.Infof("added key: %s", key.Public())
-		SignKeys[name] = key
+	// JWT keys
+	var err error
+	TokenSignKeys, err = initKeysFromString(os.Getenv("JWT_SIGN_KEYS"))
+	if err != nil {
+		return err
+	}
+	// Message keys
+	MessageSignKeys, err = initKeysFromString(os.Getenv("MESSAGE_SIGN_KEYS"))
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -132,7 +167,7 @@ func GenerateJWT(claims map[string]interface{}, exp time.Time, keyID string) (st
 			c["iss"] = os.Getenv("JWT_ISS")
 		}
 	*/
-	tokenString, err := token.SignedString(SignKeys[keyID])
+	tokenString, err := token.SignedString(TokenSignKeys[keyID])
 	if err != nil {
 		l.Errorf("failed to sign token: %s", err)
 		return "", err
@@ -145,7 +180,7 @@ func GenerateJWT(claims map[string]interface{}, exp time.Time, keyID string) (st
 func GenerateRootJWT(exp time.Time) (string, error) {
 	return GenerateJWT(map[string]interface{}{
 		"sub": os.Getenv("ROOT_TENANT"),
-	}, exp, utils.KeyID())
+	}, exp, utils.TokenKeyID())
 }
 
 // ParseClaimsUnverified parses the claims from the JWT without verifying the signature
@@ -204,7 +239,7 @@ func ValidateJWT(token string) (*jwt.Token, jwt.MapClaims, error) {
 			l.Infof("found kid: %s", kid)
 		}
 		l.Infof("using kid: %s", kid)
-		return SignKeys[kid].Public(), nil
+		return TokenSignKeys[kid].Public(), nil
 	})
 	l.Infof("parsed jwt")
 	if err != nil {

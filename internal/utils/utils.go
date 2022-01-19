@@ -105,8 +105,13 @@ func StringInSlice(a string, list []string) bool {
 	return false
 }
 
-// KeyID is a simple wrapper that returns the current active KeyID
-func KeyID() string {
+// MessageKeyID is a simple wrapper that returns the current active KeyID
+func MessageKeyID() string {
+	return os.Getenv("MESSAGE_KEY_ID")
+}
+
+// TokenKeyID is a simple wrapper that returns the current active KeyID
+func TokenKeyID() string {
 	return os.Getenv("JWT_KEY_ID")
 }
 

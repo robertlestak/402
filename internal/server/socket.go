@@ -66,7 +66,7 @@ func handleAuth(conn *websocket.Conn, message *wsMessage) error {
 		}
 		return nil
 	}
-	decryptedMeta, derr := auth.DecryptWithPrivateKey(bdata, utils.KeyID())
+	decryptedMeta, derr := auth.DecryptWithPrivateKey(bdata, utils.MessageKeyID())
 	if derr != nil {
 		l.Error("decrypt meta:", derr)
 		if err := conn.WriteJSON(wsError{Error: "decrypt meta"}); err != nil {
@@ -194,7 +194,7 @@ func handlePayment(conn *websocket.Conn, message *wsMessage) error {
 		}
 		return nil
 	}
-	decryptedMeta, derr := auth.DecryptWithPrivateKey(bdata, utils.KeyID())
+	decryptedMeta, derr := auth.DecryptWithPrivateKey(bdata, utils.MessageKeyID())
 	if derr != nil {
 		l.Error("decrypt meta:", derr)
 		if err := conn.WriteJSON(wsError{Error: "decrypt meta"}); err != nil {
