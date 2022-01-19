@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/robertlestak/hpay/internal/db"
 	"github.com/robertlestak/hpay/pkg/vault"
@@ -39,11 +40,12 @@ type Payment struct {
 
 // Tx is a generic representation of a transaction on the blockchain
 type Tx struct {
-	Status   int
-	Hash     string
-	ToAddr   string
-	FromAddr string
-	Value    float64
+	Status    int
+	Hash      string
+	ToAddr    string
+	FromAddr  string
+	Value     float64
+	UpdatedAt time.Time
 }
 
 // CreateMetaHash creates a hash of the payment meta data
@@ -157,6 +159,10 @@ func (p *Payment) ValidateAPI() (Tx, error) {
 	q := req.URL.Query()
 	q.Add("txid", p.Txid)
 	q.Add("chain", p.Network)
+	l = l.WithFields(log.Fields{
+		"query": q,
+	})
+	l.Debug("request")
 	req.URL.RawQuery = q.Encode()
 	resp, err := c.Do(req)
 	if err != nil {
@@ -226,6 +232,10 @@ func (p *PaymentRequest) ValidateAPI() (Tx, error) {
 	q := req.URL.Query()
 	q.Add("address", p.Address)
 	q.Add("chain", p.Network)
+	l = l.WithFields(log.Fields{
+		"query": q,
+	})
+	l.Debug("request")
 	req.URL.RawQuery = q.Encode()
 	resp, err := c.Do(req)
 	if err != nil {
@@ -256,6 +266,19 @@ func (p *PaymentRequest) ValidateAPI() (Tx, error) {
 				"reqs.Amount": p.Amount,
 			})
 			l.Debug("check")
+			timeCutoff := time.Now().Add(-time.Hour * 2)
+			if os.Getenv("RECEIVE_PAYMENT_TIME_CUTOFF") != "" {
+				timeCutoff, err = time.Parse(time.RFC3339, os.Getenv("RECEIVE_PAYMENT_TIME_CUTOFF"))
+				if err != nil {
+					l.WithError(err).Error("Failed to parse time cutoff")
+					return tx, err
+				}
+			}
+			// check if payment older than cutoff
+			if tx.UpdatedAt.Before(timeCutoff) {
+				l.Error("tx is over 24 hours old")
+				return tx, errors.New("tx is over 2 hours old")
+			}
 			if p.Address == tx.ToAddr && tx.Value >= p.Amount {
 				l.Debug("Tx is valid, and to address is valid")
 				return tx, nil
