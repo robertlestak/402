@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -219,6 +220,21 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 	l.Info("start")
 	var upgrader = websocket.Upgrader{}
+	upgrader.CheckOrigin = func(r *http.Request) bool {
+		if os.Getenv("CORS_ALLOWED_ORIGINS") == "*" {
+			return true
+		}
+		for _, h := range strings.Split(os.Getenv("CORS_ALLOWED_ORIGINS"), ",") {
+			origin := r.Header["Origin"]
+			if len(origin) == 0 {
+				return true
+			}
+			if origin[0] == h {
+				return true
+			}
+		}
+		return false
+	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		l.WithError(err).Error("Failed to upgrade websocket")
