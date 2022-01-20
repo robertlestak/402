@@ -1,0 +1,105 @@
+<style>
+
+:focus {
+  outline: currentcolor solid 2px;
+}
+body {
+  align-items: center;
+  background-color: #eaeaea;
+  display: flex;
+  font-family: Lato, Sans-serif;
+  font-weight: 300;
+  height: 100%;
+  justify-content: center;
+  line-height: 1.8;
+  margin: 0;
+  min-height: 100vh;
+  padding: 0;
+  width: 100%;
+}
+@media screen and (max-width: 425px) {
+  body {
+    font-size: 14px;
+  }
+}
+body > div {
+  background: #fefefe;
+  border-radius: 5px;
+  box-shadow: 0 14px 28px rgb(0 0 0 / 10%), 3px 5px 20px rgb(0 0 0 / 20%);
+  margin: auto;
+  max-width: 100%;
+  min-height: 480px;
+  overflow: hidden;
+  padding: 20px;
+  position: relative;
+  width: 768px;
+}
+
+h1 {
+  font-size: 24px;
+  text-align: center;
+}
+h2,
+p,
+ul {
+  margin: 0;
+}
+ul {
+  padding-left: 20px;
+}
+.payment-fields {
+  display: flex;
+  flex-direction: row;
+}
+input {
+  background-color: #eee;
+  border: none;
+  margin: 8px 8px 8px 0px;
+  padding: 12px 15px;
+  width: 50%;
+}
+@media screen and (max-width: 600px) {
+  input {
+    margin: 4px 4px 4px 0px;
+  }
+}
+.visuallyhidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+}
+button {
+  background-color: #005999;
+  border-color: #005999;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  margin-top: 10px;
+  min-width: 112px;
+  padding: 10px;
+}
+button:hover,
+button:focus {
+  background-color: #004a80;
+  border-color: #004a80;
+  transform: translateY(-1px);
+}
+button:active {
+  transform: translateY(1px);
+}
+
+.columns {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+.columns .column {
+    flex: 1;
+    padding: 0;
+}
+</style>

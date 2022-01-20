@@ -9,27 +9,27 @@
 <div class="container">
     <h1>Payment Required</h1>
 
-    <div class="requested-claims">
+    <div class='columns'>
+        <div class="column requested-claims">
         
-        <h2>Requested Claims</h2>
-        
-        {{ range $key, $value := .Meta.Claims }}
-            <div class="claim">
-                    <li><strong>{{ $key }}</strong>: {{ $value }}</li>
-            </div>
-        {{end}}
-    </div>
+            <h2>Requested Claims</h2>
+            
+            {{ range $key, $value := .Meta.Claims }}
+                <div class="claim">
+                        <li><strong>{{ $key }}</strong>: {{ $value }}</li>
+                </div>
+            {{end}}
+        </div>
 
-    <div class="expiry">
-        <h2>Expiry</h2>
-
-        {{if eq .Meta.Exp 0 }}
-            <p>No expiry</p>
-        {{else}}
-            <p>{{.Meta.Exp}}</p>
-        {{end}}
-
-
+        <div class="column expiry">
+            <h2>Expiry</h2>
+    
+            {{if eq .Meta.Exp 0 }}
+                <p>No expiry</p>
+            {{else}}
+                <p>{{.Meta.Exp}}</p>
+            {{end}}
+        </div>
     </div>
 
     {{ if .Meta.Customization.Image }}
@@ -40,7 +40,13 @@
 
     <div class='payment-requests'>
         
-        <h2>Payment Requests</h2>
+        {{ $length := len .Meta.Payment.Requests }} {{ if eq $length 1 }}
+            <h2>Payment Request</h2>
+        {{ else }}
+            <h2>Payment Request</h2>
+        {{ end }}
+
+        
 
         {{ if not .Meta.Payment.Requests }}
             no payment requests

@@ -17,7 +17,7 @@ func TemplatedPage(w io.Writer, meta interface{}, p string) error {
 		"p":      p,
 	})
 	l.Info("start")
-	lp := filepath.Join("static", "layout.html")
+	//lp := filepath.Join("static", "layout.html")
 	fp := filepath.Join("static", filepath.Clean(p))
 
 	// Return a 404 if the template doesn't exist
@@ -36,7 +36,7 @@ func TemplatedPage(w io.Writer, meta interface{}, p string) error {
 		return err
 	}
 
-	tmpl, err := template.ParseFiles(lp, fp)
+	tmpl, err := template.ParseGlob("static/*")
 	if err != nil {
 		l.WithError(err).Errorf("Failed to parse template: %s", fp)
 		return err
