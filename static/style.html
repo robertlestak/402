@@ -108,10 +108,17 @@ button:active {
     flex-direction: row;
     justify-content: space-between;
 }
+
 .payment-request--container {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+}
+
+@media (max-width: 600px) {
+    .columns {
+        flex-direction: column;
+    }
 }
 
 .payment-request-web3 {

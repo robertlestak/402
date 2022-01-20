@@ -79,7 +79,7 @@
                 Please do not leave this page while waiting for payment to be confirmed.
                 <br>
                 <br>
-                <span><small id='last-checked'></small></span>
+                <span><small id='last-checked'>Last checked: connecting...</small></span>
             </div>
 
     </div>
@@ -116,12 +116,17 @@
         }
         ws.send(JSON.stringify(req));
     }
-
+    function updateLastCheckedTime(lastCheckTime) {
+        if (!lastCheckTime) {
+            lastCheckTime = Date.now()
+        }
+        document.querySelector("#last-checked").innerHTML = "Last checked: " + new Date(lastCheckTime).toLocaleString();
+    }
     function handleMessageData(data) {
         console.log("message", data)
         if (data.message.indexOf("watching for txs:") !== -1) {
             var lastCheckTime = data.message.split(":")[1];
-            document.querySelector("#last-checked").innerHTML = "Last checked: " + new Date(lastCheckTime * 1000).toLocaleString();
+            updateLastCheckedTime(lastCheckTime* 1000)
             return;
         }
     }
@@ -159,6 +164,7 @@
         socket.onopen = function() {
             console.log("socket open")
             checkAddresses()
+            updateLastCheckedTime()
         };
         socket.onmessage = handleMessage
         socket.onclose = function () {
