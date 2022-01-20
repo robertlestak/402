@@ -54,14 +54,20 @@
 
         {{ range .Meta.Payment.Requests }}
             <div class='payment-request'>
-                <div class='payment-request--amount'>
-                    Amount: {{.Amount}}
+                <div class='payment-request--container'>
+                    <div class='payment-request--amount'>
+                        Amount: {{.Amount}}
+                    </div>
+                    <div class='payment-request--network'>
+                        Network: <span class='network-name'>{{.Network}}</span>
+                    </div>
+                    <div class='payment-request--address'>
+                        Address: <span class='payment-request--address-item'>{{.Address}}</span>
+                    </div>
                 </div>
-                <div class='payment-request--network'>
-                    Network: <span class='network-name'>{{.Network}}</span>
-                </div>
-                <div class='payment-request--address'>
-                    Address: <span class='payment-request--address-item'>{{.Address}}</span>
+                
+                <div class='payment-request-web3'>
+                    <button class='payment-request--button' onClick="web3Payment('{{.Address}}','{{.Amount}}')" >Pay</button>
                 </div>
             </div>
         {{ end }}
@@ -168,6 +174,7 @@
         } else {
             ws = initWS();
         }
+        showWeb3Button()
         //setInterval(ping, 5000)
     }
     main()
@@ -196,6 +203,52 @@ function manualAuth() {
     }
     ws.send(JSON.stringify(data))
     // show a loading indicator while we wait for payment to clear
+}
+
+function showWeb3Button() {
+    if (typeof window.ethereum == 'undefined') {
+        console.log("no web3")
+        return;
+    }
+    let els = document.querySelectorAll('.payment-request-web3')
+    for (let i = 0; i < els.length; i++) {
+        els[i].style.display = 'block'
+    }
+}
+
+async function web3Payment(address, amount) {
+    if (typeof window.ethereum == 'undefined') {
+        console.log("no web3")
+        return;
+      }
+
+      try {
+        let res = await window.ethereum.request({ method: 'eth_requestAccounts' })
+        if (res.length == 0) {
+            console.log("no accounts")
+            return;
+        }
+        let account = res[0]
+        let ev = amount * 1000000000000000000
+        const transactionParameters = {
+            nonce: '0x00', // ignored by MetaMask
+            //gasPrice: '0x09184e72a000', // customizable by user during MetaMask confirmation.
+            //gas: '0x2710', // customizable by user during MetaMask confirmation.
+            to: address, // Required except during contract publications.
+            from: window.ethereum.selectedAddress, // must match user's active address.
+            value: ev.toString(16), // Only required to send ether to the recipient from the initiating external account.
+            data:
+              '', // Optional, but used for defining smart contract creation and interaction.
+            //chainId: '0x3', // Used to prevent transaction reuse across blockchains. Auto-filled by MetaMask.
+          };
+        let req = await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [transactionParameters],
+            })
+        console.log(req)
+      } catch (e) {
+        console.log(e)
+      }
 }
 </script>
 
