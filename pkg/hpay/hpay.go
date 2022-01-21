@@ -240,11 +240,6 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Tenant mismatch", http.StatusUnauthorized)
 		return
 	}
-	if len(meta.Payment.Requests) == 0 {
-		l.Debug("no requested payments")
-		http.Error(w, "No requested payments", http.StatusBadRequest)
-		return
-	}
 	l.WithField("requests", meta.Payment.Requests).Debug("Got requests")
 	// loop through payment requests to create addrs if necessary
 	for _, pr := range meta.Payment.Requests {
