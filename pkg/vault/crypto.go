@@ -48,7 +48,7 @@ func NewWallet() (*Wallet, error) {
 }
 
 // NewTenantWallet creates a new wallet for a tenant and stores it to Vault
-func NewTenantWallet(tenant string) (*Wallet, error) {
+func NewTenantWallet(tenant string, network string) (*Wallet, error) {
 	if tenant == "" {
 		return nil, errors.New("tenant is empty")
 	}
@@ -58,6 +58,7 @@ func NewTenantWallet(tenant string) (*Wallet, error) {
 	}
 	w.Type = "address"
 	w.Tenant = tenant
+	w.Network = network
 	werr := w.WriteVault()
 	if werr != nil {
 		return w, werr
@@ -331,7 +332,7 @@ func HandleListWalletsForTenant(w http.ResponseWriter, r *http.Request) {
 	l := log.WithFields(log.Fields{
 		"action": "HandleListWalletsForTenant",
 	})
-	l.Info("HandleListWalletsForTenant")
+	l.Info("HandleistWalletsForTenant")
 	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
 	if tenant == "" {
 		l.Error("HandleListWalletsForTenant no tenant")
