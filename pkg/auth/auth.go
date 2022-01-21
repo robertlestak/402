@@ -214,11 +214,23 @@ func ValidateJWT(token string) (*jwt.Token, jwt.MapClaims, error) {
 		"func": "ValidateJWT",
 	})
 	l.Println("start")
+	if strings.TrimSpace(token) == "" {
+		l.Printf("token is empty")
+		return nil, nil, errors.New("token is empty")
+	}
 	kid := os.Getenv("JWT_KEY_ID")
 	unverifiedToken, _, err := ParseClaimsUnverified(token)
 	if err != nil {
 		l.Errorf("failed to parse token: %s", err)
 		return nil, nil, err
+	}
+	if unverifiedToken == nil {
+		l.Errorf("unverifiedToken is nil")
+		return nil, nil, errors.New("token is nil")
+	}
+	if _, ok := unverifiedToken.Header["kid"]; !ok {
+		l.Printf("token has no kid")
+		return nil, nil, errors.New("token has no kid")
 	}
 	if unverifiedToken.Header["kid"] != "" {
 		l.Infof("using kid=%s", unverifiedToken.Header["kid"])

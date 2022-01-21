@@ -121,6 +121,9 @@ func GetSecretRawWithFreshToken(p string) (map[string]interface{}, error) {
 	if err != nil {
 		return sec, err
 	}
+	if secret == nil {
+		return nil, nil
+	}
 	return secret.Data, nil
 }
 

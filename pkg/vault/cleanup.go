@@ -24,7 +24,7 @@ type Secret struct {
 }
 
 // Cleanup checks a secret, determines if it should be cleaned up and cleans it up if necessary
-func (s *Secret) Cleanup(retentionTime time.Duration) error {
+func (s Secret) Cleanup(retentionTime time.Duration) error {
 	l := log.WithFields(log.Fields{
 		"package":       "vault",
 		"action":        "cleanup",
@@ -92,14 +92,13 @@ func (s *Secret) Cleanup(retentionTime time.Duration) error {
 			l.Error(err)
 			return err
 		}
-		s.Wallet = w
 	}
-	if retentionTime > 0 && s.UpdatedTime.Add(retentionTime).Before(time.Now()) && s.Wallet.Txid == "" {
+	var cleanup bool
+	if retentionTime > 0 && s.UpdatedTime.Add(retentionTime).Before(time.Now()) && w.Txid == "" {
 		l.Debugf("Secret %s must be cleaned up", s.Path)
-		s.MustCleanup = true
+		cleanup = true
 	}
-	//s.MustCleanup = true
-	if s.MustCleanup {
+	if cleanup {
 		l.Debugf("secret %s must be cleaned up", s.Path)
 		if err := DeleteSecret(s.Path); err != nil {
 			l.Error(err)
