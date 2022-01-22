@@ -15,8 +15,22 @@ func Cli() error {
 		return fmt.Errorf("usage: 402 cli <action>")
 	}
 	switch os.Args[2] {
-	case "root-token":
-		if t, err := auth.GenerateRootJWT(time.Time{}); err != nil {
+	case "create-token":
+		if len(os.Args) < 4 {
+			return fmt.Errorf("usage: 402 cli create-token <tenant-id> <exp>")
+		}
+		tid := os.Args[3]
+		var exp time.Duration
+		var expT time.Time
+		var err error
+		if len(os.Args) > 4 {
+			exp, err = time.ParseDuration(os.Args[4])
+			if err != nil {
+				return fmt.Errorf("usage: 402 cli create-token <tenant-id> <exp>")
+			}
+			expT = time.Now().Add(exp)
+		}
+		if t, err := auth.GenerateSubJWT(tid, expT); err != nil {
 			return err
 		} else {
 			fmt.Println(t)

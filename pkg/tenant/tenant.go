@@ -287,6 +287,35 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	if r.URL.Query().Get("renew") != "" {
+		l.WithField("tenant", tenant).Debug("renew tenant request")
+		for _, token := range utils.AuthTokens(r) {
+			if token == "" {
+				l.Error("HandleGetWalletsForTenant no token")
+				continue
+			}
+			if auth.TokenOwnsTenant(token, tenant, true) {
+				l.Info("token owns tenant")
+				_, cl, cerr := auth.ValidateJWT(token)
+				if cerr != nil {
+					l.Error("error validating token: ", cerr)
+					http.Error(w, "error validating token", http.StatusInternalServerError)
+					return
+				}
+				l.WithField("claims", cl).Debug("claims")
+				var expc float64
+				if cs, ok := cl["exp"].(float64); ok {
+					expc = cs
+					l.WithField("exp", expc).Debug("existing exp")
+				}
+				if expc > 0 {
+					ut := time.Unix(int64(expc), 0)
+					ap.Expiry = ap.Expiry + int(time.Until(ut).Nanoseconds())
+					l.WithField("expiry", ap.Expiry).Debug("updating expiry")
+				}
+			}
+		}
+	}
 	req, err := t.PaymentRequest(ap)
 	if err != nil {
 		l.Error("error getting payment request: ", err)

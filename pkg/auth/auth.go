@@ -183,6 +183,14 @@ func GenerateRootJWT(exp time.Time) (string, error) {
 	}, exp, utils.TokenKeyID())
 }
 
+// GenerateSubJWT generates a JWT with the provided claims
+// this function should only be available to the root user
+func GenerateSubJWT(sub string, exp time.Time) (string, error) {
+	return GenerateJWT(map[string]interface{}{
+		"sub": sub,
+	}, exp, utils.TokenKeyID())
+}
+
 // ParseClaimsUnverified parses the claims from the JWT without verifying the signature
 // this is useful if we are either relying on an auth gateway ahead of us, or if we are simply
 // trying to read claims from the JWT without actually validating they are accurate.
