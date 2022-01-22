@@ -259,7 +259,7 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tenant = utils.TenantName(tenant)
-	if tenant == os.Getenv("DEFAULT_TENANT") || tenant == os.Getenv("ROOT_TENANT") {
+	if tenant == os.Getenv("DEFAULT_TENANT") || tenant == os.Getenv("ROOT_TENANT") || tenant == "402" {
 		l.Error("tenant is not allowed")
 		http.Error(w, "tenant is not allowed", http.StatusBadRequest)
 		return
