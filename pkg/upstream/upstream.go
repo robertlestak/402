@@ -2,7 +2,6 @@ package upstream
 
 import (
 	"database/sql/driver"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -338,13 +337,8 @@ func (u *Upstream) HeadResource(r string) (map[string]string, error) {
 		l.Errorf("NewRequest: %v", err)
 		return nil, err
 	}
-	em, err := auth.EncryptWithPublicKey([]byte(up), utils.MessageKeyID())
-	if err != nil {
-		l.Errorf("EncryptWithPublicKey: %v", err)
-		return nil, err
-	}
-	bs := base64.StdEncoding.EncodeToString(em)
-	req.Header.Add(utils.HeaderPrefix()+"signature", string(bs))
+	sig := utils.CreateSignature(r)
+	req.Header.Add(utils.HeaderPrefix()+"signature", string(sig))
 	c := &http.Client{}
 	resp, err := c.Do(req)
 	if err != nil {
@@ -397,13 +391,8 @@ func (u *Upstream) HTMLResource(r string) (map[string]string, error) {
 		l.Errorf("NewRequest: %v", err)
 		return nil, err
 	}
-	em, err := auth.EncryptWithPublicKey([]byte(up), utils.MessageKeyID())
-	if err != nil {
-		l.Errorf("EncryptWithPublicKey: %v", err)
-		return nil, err
-	}
-	bs := base64.StdEncoding.EncodeToString(em)
-	req.Header.Add(utils.HeaderPrefix()+"signature", string(bs))
+	sig := utils.CreateSignature(r)
+	req.Header.Add(utils.HeaderPrefix()+"signature", string(sig))
 	c := &http.Client{}
 	resp, err := c.Do(req)
 	if err != nil {

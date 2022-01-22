@@ -1,12 +1,32 @@
-package auth
+package utils
 
 import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha512"
+	"fmt"
 
 	log "github.com/sirupsen/logrus"
 )
+
+var (
+	// TokenSignKeys is a map of key IDs to private keys
+	TokenSignKeys = make(map[string]*rsa.PrivateKey)
+	// MessageSignKeys is a map of key IDs to private keys
+	MessageSignKeys = make(map[string]*rsa.PrivateKey)
+)
+
+// GetMessageKey returns the key for the given key ID
+func GetMessageKey(id string) (*rsa.PrivateKey, error) {
+	l := log.WithFields(log.Fields{
+		"func": "GetMessageKey",
+	})
+	l.Println("start")
+	if key, ok := MessageSignKeys[id]; ok {
+		return key, nil
+	}
+	return nil, fmt.Errorf("key not found: %s", id)
+}
 
 // EncryptWithPublicKey encrypts data with public key
 func EncryptWithPublicKey(msg []byte, keyID string) ([]byte, error) {

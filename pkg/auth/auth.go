@@ -17,19 +17,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var (
-	// TokenSignKeys is a map of key IDs to private keys
-	TokenSignKeys = make(map[string]*rsa.PrivateKey)
-	// MessageSignKeys is a map of key IDs to private keys
-	MessageSignKeys = make(map[string]*rsa.PrivateKey)
-)
-
 // CreateJWKS creates a JWKS document with the current sign keys
 func CreateJWKS() (string, error) {
 	var keys struct {
 		Keys []jwk.Key `json:"keys"`
 	}
-	for k, v := range TokenSignKeys {
+	for k, v := range utils.TokenSignKeys {
 		key, err := jwk.New(v)
 		if err != nil {
 			return "", fmt.Errorf("failed to create symmetric key: %s", err)
@@ -51,19 +44,7 @@ func GetTokenKey(id string) (*rsa.PrivateKey, error) {
 		"func": "GetTokenKey",
 	})
 	l.Println("start")
-	if key, ok := TokenSignKeys[id]; ok {
-		return key, nil
-	}
-	return nil, fmt.Errorf("key not found: %s", id)
-}
-
-// GetMessageKey returns the key for the given key ID
-func GetMessageKey(id string) (*rsa.PrivateKey, error) {
-	l := log.WithFields(log.Fields{
-		"func": "GetMessageKey",
-	})
-	l.Println("start")
-	if key, ok := MessageSignKeys[id]; ok {
+	if key, ok := utils.TokenSignKeys[id]; ok {
 		return key, nil
 	}
 	return nil, fmt.Errorf("key not found: %s", id)
@@ -123,12 +104,12 @@ func InitSignKeys() error {
 	l.Println("start")
 	// JWT keys
 	var err error
-	TokenSignKeys, err = initKeysFromString(os.Getenv("JWT_SIGN_KEYS"))
+	utils.TokenSignKeys, err = initKeysFromString(os.Getenv("JWT_SIGN_KEYS"))
 	if err != nil {
 		return err
 	}
 	// Message keys
-	MessageSignKeys, err = initKeysFromString(os.Getenv("MESSAGE_SIGN_KEYS"))
+	utils.MessageSignKeys, err = initKeysFromString(os.Getenv("MESSAGE_SIGN_KEYS"))
 	if err != nil {
 		return err
 	}
@@ -167,7 +148,7 @@ func GenerateJWT(claims map[string]interface{}, exp time.Time, keyID string) (st
 			c["iss"] = os.Getenv("JWT_ISS")
 		}
 	*/
-	tokenString, err := token.SignedString(TokenSignKeys[keyID])
+	tokenString, err := token.SignedString(utils.TokenSignKeys[keyID])
 	if err != nil {
 		l.Errorf("failed to sign token: %s", err)
 		return "", err
@@ -185,10 +166,8 @@ func GenerateRootJWT(exp time.Time) (string, error) {
 
 // GenerateSubJWT generates a JWT with the provided claims
 // this function should only be available to the root user
-func GenerateSubJWT(sub string, exp time.Time) (string, error) {
-	return GenerateJWT(map[string]interface{}{
-		"sub": sub,
-	}, exp, utils.TokenKeyID())
+func GenerateSubJWT(claims jwt.MapClaims, exp time.Time) (string, error) {
+	return GenerateJWT(claims, exp, utils.TokenKeyID())
 }
 
 // ParseClaimsUnverified parses the claims from the JWT without verifying the signature
@@ -259,7 +238,7 @@ func ValidateJWT(token string) (*jwt.Token, jwt.MapClaims, error) {
 			l.Infof("found kid: %s", kid)
 		}
 		l.Infof("using kid: %s", kid)
-		return TokenSignKeys[kid].Public(), nil
+		return utils.TokenSignKeys[kid].Public(), nil
 	})
 	l.Infof("parsed jwt")
 	if err != nil {
@@ -495,7 +474,7 @@ func RequestAuthorized(r *http.Request) bool {
 			continue
 		}
 		if TokenOwnsTenant(token, tenant, true) {
-			l.Error("token owns tenant")
+			l.Info("token owns tenant")
 			return true
 		}
 	}

@@ -75,7 +75,7 @@ func handleAuth(id string, message *wsMessage) error {
 		}
 		return nil
 	}
-	decryptedMeta, derr := auth.DecryptWithPrivateKey(bdata, utils.MessageKeyID())
+	decryptedMeta, derr := utils.DecryptWithPrivateKey(bdata, utils.MessageKeyID())
 	if derr != nil {
 		l.Error("decrypt meta:", derr)
 		if err := conn.WriteJSON(wsMessage{Message: "decrypt meta"}); err != nil {

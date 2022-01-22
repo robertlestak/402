@@ -6,6 +6,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -137,4 +140,81 @@ func GetPage(r *http.Request) (int, int) {
 func TenantName(t string) string {
 	t = strings.ToLower(t)
 	return t
+}
+
+func CreateSignature(p string) string {
+	l := log.WithFields(log.Fields{
+		"action": "CreateSignature",
+		"p":      p,
+	})
+	l.Debug("Creating signature")
+	sig := p + ":" + strconv.Itoa(int(time.Now().Unix()))
+	ss, serr := EncryptWithPublicKey([]byte(sig), MessageKeyID())
+	if serr != nil {
+		l.WithError(serr).Error("Error encrypting signature")
+		return ""
+	}
+	bd := base64.StdEncoding.EncodeToString(ss)
+	return bd
+}
+
+func ValidateSignature(r *http.Request) bool {
+	sig := r.Header.Get(HeaderPrefix() + "signature")
+	l := log.WithFields(log.Fields{
+		"method":    r.Method,
+		"url":       r.URL.String(),
+		"action":    "ValidateSignature",
+		"signature": sig,
+	})
+	l.Debug("validating signature")
+	if sig == "" {
+		l.Error("Signature is empty")
+		return false
+	}
+	bd, berr := base64.StdEncoding.DecodeString(sig)
+	if berr != nil {
+		l.WithError(berr).Error("Failed to decode signature")
+		return false
+	}
+	m, merr := DecryptWithPrivateKey(bd, MessageKeyID())
+	if merr != nil {
+		l.Errorf("Error decrypting signature: %s", merr)
+		return false
+	}
+	strSig := string(m)
+	l = l.WithField("signatureDecoded", strSig)
+	l.Debug("Decoded signature")
+	strs := strings.Split(strSig, ":")
+	if len(strs) != 2 {
+		l.Error("Invalid signature")
+		return false
+	}
+	res := strs[0]
+	strUnixTime := strs[1]
+	if r.URL.Path != res {
+		l.Errorf("Invalid signature: %s", res)
+		return false
+	}
+	unixTime, err := strconv.ParseInt(strUnixTime, 10, 64)
+	if err != nil {
+		l.Errorf("Error converting signature to unix time: %s", err)
+		return false
+	}
+	sigExp, err := strconv.ParseInt(os.Getenv("SIGNATURE_EXPIRY_TIME"), 10, 64)
+	if err != nil {
+		l.Errorf("Error converting signature expiry time: %s", err)
+		return false
+	}
+	tdiff := time.Now().Unix() - unixTime
+	l = l.WithFields(log.Fields{
+		"timeDiff": tdiff,
+		"sigExp":   sigExp,
+	})
+	l.Debug("Time diff")
+	if tdiff > sigExp {
+		l.Error("Signature has expired")
+		return false
+	}
+	l.Debug("Signature valid")
+	return true
 }

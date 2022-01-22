@@ -23,6 +23,7 @@ import (
 type Meta struct {
 	Claims        jwt.MapClaims    `json:"claims"`
 	Exp           time.Duration    `json:"exp"`
+	Renewable     bool             `json:"renewable"`
 	Payment       *payment.Payment `json:"payment"`
 	Customization Customization    `json:"customization"`
 	UpstreamID    uint             `json:"upstream_id"`
@@ -182,6 +183,15 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "no resource")
 		return
 	}
+	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
+	renewReq := r.URL.Query().Get(utils.HeaderPrefix()+"renew") != ""
+	if strings.Contains(resource, utils.HeaderPrefix()+"renew=true") {
+		renewReq = true
+		resource = strings.Replace(resource, "?"+utils.HeaderPrefix()+"renew=true", "", 1)
+		resource = strings.Replace(resource, "&"+utils.HeaderPrefix()+"renew=true", "", 1)
+	}
+	l = l.WithField("renew", renewReq)
+	l.Debug("renewal status")
 	claims, err := requestClaims(r, resource)
 	if err != nil {
 		l.WithError(err).Error("Failed to validate JWT")
@@ -189,6 +199,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, http.StatusText(http.StatusUnauthorized))
 		return
 	}
+	l.WithField("claims", claims).Debug("requestClaims")
 	us, uerr := upstream.UpstreamForRequest(r)
 	if uerr != nil {
 		l.WithError(uerr).Error("Failed to find upstream")
@@ -196,24 +207,10 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sig := r.Header.Get(utils.HeaderPrefix() + "signature")
-	if sig != "" {
-		bd, berr := base64.StdEncoding.DecodeString(sig)
-		if berr != nil {
-			l.WithError(berr).Error("Failed to decode signature")
-			http.Error(w, "Failed to decode signature", http.StatusInternalServerError)
-			return
-		}
-		m, merr := auth.DecryptWithPrivateKey(bd, utils.MessageKeyID())
-		if merr != nil {
-			l.Errorf("Error decrypting signature: %s", merr)
-			http.Error(w, "Failed to decrypt signature", http.StatusInternalServerError)
-			return
-		}
-		if string(m) == *us.Endpoint+resource {
-			l.Debug("Signature matches, returning 200")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
+	if sig != "" && utils.ValidateSignature(r) {
+		l.Debug("signature validated")
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 	rd, herr := us.GetResourceMeta(resource)
 	if herr != nil {
@@ -233,27 +230,37 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+	var claimsValid bool
 	meta.UpstreamID = us.ID
 	l.WithField("meta", meta).Debug("Got meta")
+	if meta.Payment.Tenant == "" && tenant != "" {
+		meta.Payment.Tenant = tenant
+	} else if meta.Payment.Tenant == "" && tenant == "" {
+		meta.Payment.Tenant = os.Getenv("DEFAULT_TENANT")
+		l.WithField("tenant", meta.Payment.Tenant).Debug("No tenant provided, using default")
+	}
+	if cerr := ValidateRequestedClaims(meta.Claims, us); cerr != nil {
+		l.Error("requested claims not valid for request")
+		http.Error(w, "requested claims not valid for request", http.StatusUnauthorized)
+		return
+	}
+	//meta.Claims["tid"] = meta.Payment.Tenant
+	//meta.Claims["iss"] = meta.Payment.Tenant
 	if claims != nil {
+		l.WithField("claims", claims).Debug("claims found")
 		if verr := auth.ValidateClaims(claims, meta.Claims); verr != nil {
 			l.Error("claims not valid")
-		} else {
+			claimsValid = false
+		}
+		if !renewReq {
 			l.Debug("claims valid")
 			w.WriteHeader(http.StatusOK)
 			return
+		} else {
+			claimsValid = true
 		}
 	} else {
 		l.Debug("no claims")
-		if cerr := ValidateRequestedClaims(meta.Claims, us); cerr != nil {
-			l.Error("requested claims not valid for request")
-			http.Error(w, "requested claims not valid for request", http.StatusUnauthorized)
-			return
-		}
-	}
-	if meta.Payment.Tenant == "" {
-		meta.Payment.Tenant = os.Getenv("DEFAULT_TENANT")
-		l.WithField("tenant", meta.Payment.Tenant).Debug("No tenant provided, using default")
 	}
 	if tid, ok := claims["tid"]; ok && tid != "" && tid != meta.Payment.Tenant {
 		l.WithField("tenant", meta.Payment.Tenant).Debug("Tenant mismatch")
@@ -275,13 +282,26 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 			pr.Address = newWallet.Address
 		}
 	}
+	if renewReq && claimsValid {
+		l.Debug("renewal request")
+		var expc float64
+		if cs, ok := claims["exp"].(float64); ok {
+			expc = cs
+			l.WithField("exp", expc).Debug("existing exp")
+		}
+		if expc > 0 {
+			ut := time.Unix(int64(expc), 0)
+			meta.Exp = time.Duration(meta.Exp.Nanoseconds() + time.Until(ut).Nanoseconds())
+			l.WithField("expiry", meta.Exp).Debug("updating expiry")
+		}
+	}
 	mjson, err := json.Marshal(meta)
 	if err != nil {
 		l.WithError(err).Error("Failed to marshal meta")
 		http.Error(w, "Failed to marshal meta", http.StatusInternalServerError)
 		return
 	}
-	em, err := auth.EncryptWithPublicKey(mjson, utils.MessageKeyID())
+	em, err := utils.EncryptWithPublicKey(mjson, utils.MessageKeyID())
 	if err != nil {
 		l.WithError(err).Error("Failed to encrypt meta")
 		http.Error(w, "Failed to encrypt meta", http.StatusInternalServerError)
@@ -314,7 +334,7 @@ func (m *Meta) Decrypt(encrypted string) error {
 		return nil
 	}
 
-	bd, berr := auth.DecryptWithPrivateKey([]byte(encrypted), utils.MessageKeyID())
+	bd, berr := utils.DecryptWithPrivateKey([]byte(encrypted), utils.MessageKeyID())
 	if berr != nil {
 		l.WithError(berr).Error("Failed to decrypt")
 		return berr
@@ -373,7 +393,7 @@ func ValidateEncryptedPayment(requestId string, address string, network string, 
 		l.WithError(berr).Error("Failed to decode")
 		return berr
 	}
-	decrypted, err := auth.DecryptWithPrivateKey(bd, utils.MessageKeyID())
+	decrypted, err := utils.DecryptWithPrivateKey(bd, utils.MessageKeyID())
 	if err != nil {
 		l.WithError(err).Error("Failed to decrypt")
 		return err

@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/robertlestak/hpay/pkg/auth"
 	"github.com/robertlestak/hpay/pkg/vault"
 )
@@ -17,20 +18,26 @@ func Cli() error {
 	switch os.Args[2] {
 	case "create-token":
 		if len(os.Args) < 4 {
-			return fmt.Errorf("usage: 402 cli create-token <tenant-id> <exp>")
+			return fmt.Errorf("usage: 402 cli create-token <tenant-id> <pid> <exp>")
 		}
 		tid := os.Args[3]
+		pid := os.Args[4]
 		var exp time.Duration
 		var expT time.Time
 		var err error
-		if len(os.Args) > 4 {
-			exp, err = time.ParseDuration(os.Args[4])
+		if len(os.Args) > 5 {
+			exp, err = time.ParseDuration(os.Args[5])
 			if err != nil {
-				return fmt.Errorf("usage: 402 cli create-token <tenant-id> <exp>")
+				return fmt.Errorf("usage: 402 cli create-token <tenant-id> <pid> <exp>")
 			}
 			expT = time.Now().Add(exp)
 		}
-		if t, err := auth.GenerateSubJWT(tid, expT); err != nil {
+		claims := jwt.MapClaims{
+			"pid": pid,
+			"sub": tid,
+			"iss": os.Getenv("JWT_ISS"),
+		}
+		if t, err := auth.GenerateSubJWT(claims, expT); err != nil {
 			return err
 		} else {
 			fmt.Println(t)

@@ -12,7 +12,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/robertlestak/hpay/internal/pubsub"
 	"github.com/robertlestak/hpay/internal/utils"
-	"github.com/robertlestak/hpay/pkg/auth"
 	"github.com/robertlestak/hpay/pkg/hpay"
 	"github.com/robertlestak/hpay/pkg/payment"
 	"github.com/robertlestak/hpay/pkg/upstream"
@@ -39,7 +38,7 @@ func decryptMetaFromPayment(payment *payment.Payment) (hpay.Meta, error) {
 		l.Error("base64 decode:", berr)
 		return meta, errors.New("base64 decode: " + berr.Error())
 	}
-	decryptedMeta, derr := auth.DecryptWithPrivateKey(bdata, utils.MessageKeyID())
+	decryptedMeta, derr := utils.DecryptWithPrivateKey(bdata, utils.MessageKeyID())
 	if derr != nil {
 		l.Error("decrypt meta:", derr)
 		return meta, errors.New("decrypt meta: " + derr.Error())
