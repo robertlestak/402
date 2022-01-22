@@ -133,3 +133,8 @@ func GetPage(r *http.Request) (int, int) {
 	}
 	return page, pageSize
 }
+
+func TenantName(t string) string {
+	t = strings.ToLower(t)
+	return t
+}

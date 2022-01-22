@@ -258,6 +258,12 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "tenant is empty", http.StatusBadRequest)
 		return
 	}
+	tenant = utils.TenantName(tenant)
+	if tenant == os.Getenv("DEFAULT_TENANT") || tenant == os.Getenv("ROOT_TENANT") {
+		l.Error("tenant is not allowed")
+		http.Error(w, "tenant is not allowed", http.StatusBadRequest)
+		return
+	}
 	plan := vars["plan"]
 	if plan == "" {
 		l.Info("plan is empty, using default")
@@ -270,6 +276,17 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := &Tenant{Name: tenant}
+	if err := t.GetByName(); err != nil && err != gorm.ErrRecordNotFound {
+		l.Error("error getting tenant: ", err)
+		http.Error(w, "error getting tenant", http.StatusInternalServerError)
+		return
+	}
+	r.Header.Set(utils.HeaderPrefix()+"tenant", tenant)
+	if t.ID != 0 && !auth.RequestAuthorized(r) {
+		l.Debug("unauthorized")
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	req, err := t.PaymentRequest(ap)
 	if err != nil {
 		l.Error("error getting payment request: ", err)
