@@ -195,6 +195,26 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to find upstream", http.StatusInternalServerError)
 		return
 	}
+	sig := r.Header.Get(utils.HeaderPrefix() + "signature")
+	if sig != "" {
+		bd, berr := base64.StdEncoding.DecodeString(sig)
+		if berr != nil {
+			l.WithError(berr).Error("Failed to decode signature")
+			http.Error(w, "Failed to decode signature", http.StatusInternalServerError)
+			return
+		}
+		m, merr := auth.DecryptWithPrivateKey(bd, utils.MessageKeyID())
+		if merr != nil {
+			l.Errorf("Error decrypting signature: %s", merr)
+			http.Error(w, "Failed to decrypt signature", http.StatusInternalServerError)
+			return
+		}
+		if string(m) == *us.Endpoint+resource {
+			l.Debug("Signature matches, returning 200")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}
 	rd, herr := us.GetResourceMeta(resource)
 	if herr != nil {
 		l.WithError(herr).Error("Failed to get headers")
