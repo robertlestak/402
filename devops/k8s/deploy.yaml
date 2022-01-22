@@ -17,6 +17,7 @@ spec:
     metadata:
       labels:
         app: hpay
+        402.sh/enabled: "true"
         version: v1
     spec:
       serviceAccountName: hpay
