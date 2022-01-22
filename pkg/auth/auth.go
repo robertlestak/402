@@ -374,11 +374,11 @@ func TokenOwnsTenant(token string, tenant string, verified bool) bool {
 		"tenant":      tenant,
 		"withService": withService,
 	})
+	l.Debug("start")
 	if token == "" {
 		l.Error("token is empty")
 		return false
 	}
-	l.Println("start")
 	if TokenIsRoot(token) {
 		l.Debug("token is root")
 		return true
@@ -386,21 +386,28 @@ func TokenOwnsTenant(token string, tenant string, verified bool) bool {
 	var claims jwt.MapClaims
 	var err error
 	if withService == "true" {
+		l.Debug("validating with service")
 		_, claims, err = ValidateJWTWithService(token)
 	} else if verified {
+		l.Debug("validating verified")
 		_, claims, err = ValidateJWT(token)
 	} else {
+		l.Debug("validating unverified")
 		_, claims, err = ParseClaimsUnverified(token)
 	}
 	if err != nil {
 		l.Errorf("failed to parse token: %s", err)
 		return false
 	}
+	l.Debug("claims=%v", claims)
 	if sub, ok := claims["sub"]; ok {
+		l.Debugf("sub=%s tenant=%s", sub, tenant)
 		if sub.(string) == tenant {
+			l.Debug("sub==tenant")
 			l.Debug("end")
 			return true
 		}
+		l.Debug("sub!=tenant")
 	}
 	l.Debug("end")
 	return false
@@ -468,7 +475,9 @@ func RequestAuthorized(r *http.Request) bool {
 		l.Info("tenant is empty")
 		tenant = os.Getenv("DEFAULT_TENANT")
 	}
-	for _, token := range utils.AuthTokens(r) {
+	ts := utils.AuthTokens(r)
+	l.Debugf("tenant=%s, tokens=%v", tenant, ts)
+	for _, token := range ts {
 		if token == "" {
 			l.Error("HandleGetWalletsForTenant no token")
 			continue

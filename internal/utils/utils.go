@@ -72,29 +72,45 @@ func TokenCookiePrefix() string {
 // AuthTokens returns the auth token from the request
 // iterating headers and cookies to find the tokens
 func AuthTokens(r *http.Request) map[string]string {
+	l := log.WithFields(log.Fields{
+		"package": "utils",
+		"action":  "AuthTokens",
+	})
+	l.Debug("Getting auth tokens")
 	tokens := make(map[string]string)
 	for _, v := range r.Cookies() {
 		if v.Name == os.Getenv("HEADER_NAME_PREFIX")+"_token" {
+			l.WithField("token", v.Value).Debug("Found token in cookie")
 			tokens[v.Name] = v.Value
 		}
 		pf := TokenCookiePrefix()
+		l = l.WithField("prefix", pf)
 		if strings.HasPrefix(v.Name, pf) {
+			l.WithField("token", v.Value).Debug("Found token in cookie")
 			key := strings.TrimPrefix(v.Name, pf)
 			resource, err := Base64DecodeStripped(key)
 			if err != nil {
+				l.WithError(err).Error("Error decoding token")
 				return nil
 			}
 			tokens[resource] = v.Value
 		}
 	}
 	token := HeaderPrefix() + "token"
+	l = l.WithField("token", token)
 	if t := r.Header.Get(token); t == "" {
+		l.Debug("Token not found in header")
 		token = r.Header.Get("Authorization")
 		token = strings.TrimPrefix(token, "Bearer ")
 		if token != "" {
+			l.WithField("token", token).Debug("Found token in header")
 			tokens["Authorization"] = token
 		}
+	} else {
+		l.WithField("token", t).Debug("Found token in header")
+		tokens[token] = t
 	}
+	l.WithField("tokens", tokens).Debug("Returning tokens")
 	return tokens
 }
 
@@ -143,6 +159,10 @@ func TenantName(t string) string {
 }
 
 func CreateSignature(p string) string {
+	pp := strings.Split(p, "?")
+	if len(pp) > 1 {
+		p = pp[0]
+	}
 	l := log.WithFields(log.Fields{
 		"action": "CreateSignature",
 		"p":      p,

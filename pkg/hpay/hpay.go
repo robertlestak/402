@@ -139,17 +139,24 @@ func requestClaims(r *http.Request, resource string) (jwt.MapClaims, error) {
 	var err error
 	authTokens := utils.AuthTokens(r)
 	if len(authTokens) == 0 {
-		l.Info("no auth token")
+		l.Info("no auth tokens in request")
 	} else {
+		l.WithField("auth_tokens", authTokens).Debug("auth tokens in request, searching for most granular")
 		var token string
 		if rc, ok := authTokens[resource]; ok {
+			l.WithField("resource", resource).Debug("found resource claim")
 			token = rc
+		} else if hc, ok := authTokens[utils.HeaderPrefix()+"token"]; ok {
+			l.WithField("header_name", utils.HeaderPrefix()+"token").Debug("found header claim")
+			token = hc
 		} else if hc, ok := authTokens[os.Getenv("HEADER_NAME_PREFIX")+"_token"]; ok {
+			l.WithField("header_name", os.Getenv("HEADER_NAME_PREFIX")+"_token").Debug("found header claim")
 			token = hc
 		} else if rc, ok := authTokens["Authorization"]; ok {
+			l.WithField("header_name", "Authorization").Debug("found header claim")
 			token = rc
 		} else {
-			l.Error("no auth token")
+			l.Error("no auth token found")
 		}
 		if token != "" {
 			_, claims, err = auth.ValidateJWT(token)
@@ -251,8 +258,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		if verr := auth.ValidateClaims(claims, meta.Claims); verr != nil {
 			l.Error("claims not valid")
 			claimsValid = false
-		}
-		if !renewReq {
+		} else if !renewReq {
 			l.Debug("claims valid")
 			w.WriteHeader(http.StatusOK)
 			return
