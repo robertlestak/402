@@ -191,6 +191,12 @@ func HandleGetTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l.WithField("tenant", t).Debug("tenant found")
+	r.Header.Set("Content-Type", "application/json")
+	redirect := r.URL.Query().Get("redirect")
+	if redirect != "" {
+		l.WithField("redirect", redirect).Debug("redirecting")
+		http.Redirect(w, r, redirect, http.StatusFound)
+	}
 	if jerr := json.NewEncoder(w).Encode(t); jerr != nil {
 		l.Error("error encoding tenant: ", jerr)
 		http.Error(w, "error encoding tenant", http.StatusInternalServerError)
