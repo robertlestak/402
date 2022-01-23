@@ -358,6 +358,11 @@ func (u *Upstream) HeadResource(r string, token string, nocache bool) (map[strin
 		headers[strings.ToLower(k)] = v[0]
 	}
 	headers = filterMeta(headers)
+	if nh, ok := headers[utils.HeaderPrefix()+"no-cache"]; ok {
+		if nh == "true" {
+			nocache = true
+		}
+	}
 	if !nocache {
 		cacheData, err := json.Marshal(headers)
 		if err != nil {
@@ -436,6 +441,11 @@ func (u *Upstream) HTMLResource(r string, token string, nocache bool) (map[strin
 		}
 	})
 	headers = filterMeta(headers)
+	if nh, ok := headers[utils.HeaderPrefix()+"no-cache"]; ok {
+		if nh == "true" {
+			nocache = true
+		}
+	}
 	if !nocache {
 		cacheData, err := json.Marshal(headers)
 		if err != nil {
