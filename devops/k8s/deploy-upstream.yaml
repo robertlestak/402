@@ -36,7 +36,7 @@ spec:
             memory: 500Mi
             cpu: 50m
         ports:
-        - containerPort: 80
+        - containerPort: 9998
         envFrom:
         - secretRef:
             name: hpay-v1
