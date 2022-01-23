@@ -2,6 +2,23 @@
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
+  name: 402-allow-ingress
+  namespace: humun-client-svcs
+spec:
+  podSelector:
+    matchLabels:
+      app: hpay-upstream
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: hpay
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
   name: 402-default-deny
   namespace: humun-client-svcs
 spec:
