@@ -222,6 +222,7 @@ func (t *Tenant) PaymentRequest(ap *AccessPlan) (string, error) {
 			"pid": ap.Name,
 			"iss": os.Getenv("JWT_ISS"),
 		},
+		Renewable: true,
 		Payment: &payment.Payment{
 			Tenant: t.Name,
 		},

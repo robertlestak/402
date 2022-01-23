@@ -253,6 +253,10 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	//meta.Claims["tid"] = meta.Payment.Tenant
 	//meta.Claims["iss"] = meta.Payment.Tenant
+	if renewReq && !meta.Renewable {
+		l.Debug("renew request on non-renewable resource")
+		renewReq = false
+	}
 	if claims != nil {
 		l.WithField("claims", claims).Debug("claims found")
 		if verr := auth.ValidateClaims(claims, meta.Claims); verr != nil {
