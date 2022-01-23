@@ -283,7 +283,8 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Header.Set(utils.HeaderPrefix()+"tenant", tenant)
-	if t.ID != 0 && !auth.RequestAuthorized(r) && !utils.ValidateSignature(r) {
+	l.WithField("tenant", t).Debug("tenant found")
+	if t.ID != 0 && !auth.RequestAuthorized(r) {
 		l.Debug("unauthorized")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return

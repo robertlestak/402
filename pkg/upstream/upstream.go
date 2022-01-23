@@ -525,6 +525,9 @@ func HandleUpdateUpstream(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if rt := r.Header.Get(utils.HeaderPrefix() + "tenant"); rt != "" {
+		up.Tenant = &rt
+	}
 	l.WithField("upstream", up).Debug("Upstream")
 	if err := up.Validate(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
