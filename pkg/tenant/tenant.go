@@ -41,6 +41,9 @@ func (t *Tenant) Validate() error {
 	} else if t.Name == os.Getenv("DEFAULT_TENANT") {
 		l.Info("default tenant")
 		return errors.New("default tenant")
+	} else if t.Name == "402" {
+		l.Info("402 tenant")
+		return errors.New("402 tenant")
 	}
 	l.Debug("end")
 	return nil
