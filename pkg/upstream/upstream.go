@@ -321,7 +321,9 @@ func (u *Upstream) HeadResource(r string, token string, nocache bool) (map[strin
 	var cacheDataStr string
 	var cerr error
 	headers := make(map[string]string)
-	if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" || nocache {
+	if nocache {
+		l.Debug("No cache")
+	} else if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" || nocache {
 		l.WithField("cache", "miss").Debug("Cache miss")
 	} else {
 		l.WithField("cache", "hit").Debug("Cache hit")
@@ -381,7 +383,9 @@ func (u *Upstream) HTMLResource(r string, token string, nocache bool) (map[strin
 	var cacheDataStr string
 	var cerr error
 	headers := make(map[string]string)
-	if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" || nocache {
+	if nocache {
+		l.WithField("cache", "miss").Debug("Cache miss no-cache")
+	} else if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" {
 		l.WithField("cache", "miss").Debug("Cache miss")
 	} else {
 		l.WithField("cache", "hit").Debug("Cache hit")
