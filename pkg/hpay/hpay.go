@@ -215,7 +215,10 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
 	renewReq := r.URL.Query().Get(utils.HeaderPrefix()+"renew") != ""
-	nocache := r.Header.Get(utils.HeaderPrefix()+"no-cache") == "true"
+	enableCache := true
+	if r.Header.Get(utils.HeaderPrefix()+"cache") != "" {
+		enableCache = r.Header.Get(utils.HeaderPrefix()+"cache") == "true"
+	}
 	if strings.Contains(resource, utils.HeaderPrefix()+"renew=true") {
 		renewReq = true
 		resource = strings.Replace(resource, "?"+utils.HeaderPrefix()+"renew=true", "", 1)
@@ -249,7 +252,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to request token", http.StatusInternalServerError)
 		return
 	}
-	rd, herr := us.GetResourceMeta(resource, rt, nocache)
+	rd, herr := us.GetResourceMeta(resource, rt, enableCache)
 	if herr != nil {
 		l.WithError(herr).Error("Failed to get headers")
 		http.Error(w, "Failed to get headers", http.StatusInternalServerError)

@@ -270,7 +270,7 @@ RangeUpstreams:
 }
 
 // GetResourceMeta returns the meta data for the resource
-func (u *Upstream) GetResourceMeta(r string, token string, nocache bool) (map[string]string, error) {
+func (u *Upstream) GetResourceMeta(r string, token string, enableCache bool) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
 		"action":    "Upstream.GetResourceMeta",
 		"resource":  r,
@@ -279,9 +279,9 @@ func (u *Upstream) GetResourceMeta(r string, token string, nocache bool) (map[st
 	l.Debug("start")
 	switch *u.Method {
 	case MethodHTTP:
-		return u.HeadResource(r, token, nocache)
+		return u.HeadResource(r, token, enableCache)
 	case MethodHTML:
-		return u.HTMLResource(r, token, nocache)
+		return u.HTMLResource(r, token, enableCache)
 	default:
 		l.Errorf("Unknown method: %s", *u.Method)
 		return nil, errors.New("unknown method")
@@ -309,11 +309,11 @@ func filterMeta(meta map[string]string) map[string]string {
 
 // HeadResource makes a HEAD request to the upstream
 // and returns the meta data
-func (u *Upstream) HeadResource(r string, token string, nocache bool) (map[string]string, error) {
+func (u *Upstream) HeadResource(r string, token string, enableCache bool) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
-		"action":   "Upstream.HeadResource",
-		"resource": r,
-		"nocache":  nocache,
+		"action":      "Upstream.HeadResource",
+		"resource":    r,
+		"enableCache": enableCache,
 	})
 	l.Debug("start")
 	ep := *u.Endpoint
@@ -321,9 +321,9 @@ func (u *Upstream) HeadResource(r string, token string, nocache bool) (map[strin
 	var cacheDataStr string
 	var cerr error
 	headers := make(map[string]string)
-	if nocache {
+	if !enableCache {
 		l.Debug("No cache")
-	} else if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" || nocache {
+	} else if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" {
 		l.WithField("cache", "miss").Debug("Cache miss")
 	} else {
 		l.WithField("cache", "hit").Debug("Cache hit")
@@ -358,12 +358,12 @@ func (u *Upstream) HeadResource(r string, token string, nocache bool) (map[strin
 		headers[strings.ToLower(k)] = v[0]
 	}
 	headers = filterMeta(headers)
-	if nh, ok := headers[utils.HeaderPrefix()+"no-cache"]; ok {
+	if nh, ok := headers[utils.HeaderPrefix()+"cache"]; ok {
 		if nh == "true" {
-			nocache = true
+			enableCache = true
 		}
 	}
-	if !nocache {
+	if enableCache {
 		cacheData, err := json.Marshal(headers)
 		if err != nil {
 			l.Errorf("Marshal: %v", err)
@@ -376,11 +376,11 @@ func (u *Upstream) HeadResource(r string, token string, nocache bool) (map[strin
 
 // HMTLResource makes a GET request to the upstream
 // and returns the meta data from the body
-func (u *Upstream) HTMLResource(r string, token string, nocache bool) (map[string]string, error) {
+func (u *Upstream) HTMLResource(r string, token string, enableCache bool) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
-		"action":   "Upstream.HTMLResource",
-		"resource": r,
-		"nocache":  nocache,
+		"action":      "Upstream.HTMLResource",
+		"resource":    r,
+		"enableCache": enableCache,
 	})
 	l.Debug("start")
 	ep := *u.Endpoint
@@ -388,8 +388,8 @@ func (u *Upstream) HTMLResource(r string, token string, nocache bool) (map[strin
 	var cacheDataStr string
 	var cerr error
 	headers := make(map[string]string)
-	if nocache {
-		l.WithField("cache", "miss").Debug("Cache miss no-cache")
+	if !enableCache {
+		l.WithField("cache", "miss").Debug("Cache miss cache")
 	} else if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" {
 		l.WithField("cache", "miss").Debug("Cache miss")
 	} else {
@@ -441,12 +441,12 @@ func (u *Upstream) HTMLResource(r string, token string, nocache bool) (map[strin
 		}
 	})
 	headers = filterMeta(headers)
-	if nh, ok := headers[utils.HeaderPrefix()+"no-cache"]; ok {
+	if nh, ok := headers[utils.HeaderPrefix()+"cache"]; ok {
 		if nh == "true" {
-			nocache = true
+			enableCache = true
 		}
 	}
-	if !nocache {
+	if enableCache {
 		cacheData, err := json.Marshal(headers)
 		if err != nil {
 			l.Errorf("Marshal: %v", err)
