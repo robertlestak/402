@@ -356,12 +356,14 @@ func (u *Upstream) HeadResource(r string, token string, nocache bool) (map[strin
 		headers[strings.ToLower(k)] = v[0]
 	}
 	headers = filterMeta(headers)
-	cacheData, err := json.Marshal(headers)
-	if err != nil {
-		l.Errorf("Marshal: %v", err)
-		return nil, err
+	if !nocache {
+		cacheData, err := json.Marshal(headers)
+		if err != nil {
+			l.Errorf("Marshal: %v", err)
+			return nil, err
+		}
+		cache.Set(up, string(cacheData), cache.DefaultExpiration)
 	}
-	cache.Set(up, string(cacheData), cache.DefaultExpiration)
 	return headers, nil
 }
 
@@ -430,12 +432,14 @@ func (u *Upstream) HTMLResource(r string, token string, nocache bool) (map[strin
 		}
 	})
 	headers = filterMeta(headers)
-	cacheData, err := json.Marshal(headers)
-	if err != nil {
-		l.Errorf("Marshal: %v", err)
-		return nil, err
+	if !nocache {
+		cacheData, err := json.Marshal(headers)
+		if err != nil {
+			l.Errorf("Marshal: %v", err)
+			return nil, err
+		}
+		cache.Set(up, string(cacheData), cache.DefaultExpiration)
 	}
-	cache.Set(up, string(cacheData), cache.DefaultExpiration)
 	return headers, nil
 }
 
