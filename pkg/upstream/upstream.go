@@ -361,6 +361,8 @@ func (u *Upstream) HeadResource(r string, token string, enableCache bool) (map[s
 	if nh, ok := headers[utils.HeaderPrefix()+"cache"]; ok {
 		if nh == "true" {
 			enableCache = true
+		} else {
+			enableCache = false
 		}
 	}
 	if enableCache {
@@ -444,6 +446,8 @@ func (u *Upstream) HTMLResource(r string, token string, enableCache bool) (map[s
 	if nh, ok := headers[utils.HeaderPrefix()+"cache"]; ok {
 		if nh == "true" {
 			enableCache = true
+		} else {
+			enableCache = false
 		}
 	}
 	if enableCache {
