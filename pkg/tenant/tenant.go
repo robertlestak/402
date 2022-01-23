@@ -297,6 +297,7 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set(utils.HeaderPrefix()+"request", req)
 	w.Header().Set(utils.HeaderPrefix()+"required", "true")
+	w.Header().Set(utils.HeaderPrefix()+"no-cache", "true")
 	w.WriteHeader(http.StatusPaymentRequired)
 }
 

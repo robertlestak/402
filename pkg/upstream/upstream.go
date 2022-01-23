@@ -270,17 +270,18 @@ RangeUpstreams:
 }
 
 // GetResourceMeta returns the meta data for the resource
-func (u *Upstream) GetResourceMeta(r string) (map[string]string, error) {
+func (u *Upstream) GetResourceMeta(r string, token string, nocache bool) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
-		"action":   "Upstream.GetResourceMeta",
-		"resource": r,
+		"action":    "Upstream.GetResourceMeta",
+		"resource":  r,
+		"withToken": token != "",
 	})
 	l.Debug("start")
 	switch *u.Method {
 	case MethodHTTP:
-		return u.HeadResource(r)
+		return u.HeadResource(r, token, nocache)
 	case MethodHTML:
-		return u.HTMLResource(r)
+		return u.HTMLResource(r, token, nocache)
 	default:
 		l.Errorf("Unknown method: %s", *u.Method)
 		return nil, errors.New("unknown method")
@@ -308,10 +309,11 @@ func filterMeta(meta map[string]string) map[string]string {
 
 // HeadResource makes a HEAD request to the upstream
 // and returns the meta data
-func (u *Upstream) HeadResource(r string) (map[string]string, error) {
+func (u *Upstream) HeadResource(r string, token string, nocache bool) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
 		"action":   "Upstream.HeadResource",
 		"resource": r,
+		"nocache":  nocache,
 	})
 	l.Debug("start")
 	ep := *u.Endpoint
@@ -319,7 +321,7 @@ func (u *Upstream) HeadResource(r string) (map[string]string, error) {
 	var cacheDataStr string
 	var cerr error
 	headers := make(map[string]string)
-	if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" {
+	if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" || nocache {
 		l.WithField("cache", "miss").Debug("Cache miss")
 	} else {
 		l.WithField("cache", "hit").Debug("Cache hit")
@@ -338,6 +340,9 @@ func (u *Upstream) HeadResource(r string) (map[string]string, error) {
 		return nil, err
 	}
 	sig := utils.CreateSignature(r)
+	if token != "" {
+		req.Header.Add(utils.HeaderPrefix()+"token", token)
+	}
 	req.Header.Add(utils.HeaderPrefix()+"signature", string(sig))
 	c := &http.Client{}
 	resp, err := c.Do(req)
@@ -362,10 +367,11 @@ func (u *Upstream) HeadResource(r string) (map[string]string, error) {
 
 // HMTLResource makes a GET request to the upstream
 // and returns the meta data from the body
-func (u *Upstream) HTMLResource(r string) (map[string]string, error) {
+func (u *Upstream) HTMLResource(r string, token string, nocache bool) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
 		"action":   "Upstream.HTMLResource",
 		"resource": r,
+		"nocache":  nocache,
 	})
 	l.Debug("start")
 	ep := *u.Endpoint
@@ -373,7 +379,7 @@ func (u *Upstream) HTMLResource(r string) (map[string]string, error) {
 	var cacheDataStr string
 	var cerr error
 	headers := make(map[string]string)
-	if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" {
+	if cacheDataStr, cerr = cache.Get(up); cerr != nil || cacheDataStr == "" || nocache {
 		l.WithField("cache", "miss").Debug("Cache miss")
 	} else {
 		l.WithField("cache", "hit").Debug("Cache hit")
@@ -392,6 +398,9 @@ func (u *Upstream) HTMLResource(r string) (map[string]string, error) {
 		return nil, err
 	}
 	sig := utils.CreateSignature(r)
+	if token != "" {
+		req.Header.Add(utils.HeaderPrefix()+"token", token)
+	}
 	req.Header.Add(utils.HeaderPrefix()+"signature", string(sig))
 	c := &http.Client{}
 	resp, err := c.Do(req)

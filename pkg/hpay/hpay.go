@@ -129,17 +129,15 @@ func parseMeta(h map[string]string) (*Meta, error) {
 	return &metaObj, nil
 }
 
-func requestClaims(r *http.Request, resource string) (jwt.MapClaims, error) {
+func requestToken(r *http.Request, resource string) (string, error) {
 	l := log.WithFields(log.Fields{
-		"action": "requestClaims",
+		"action": "requestToken",
 	})
 	l.Debug("start")
-	defer l.Debug("end")
-	var claims jwt.MapClaims
-	var err error
 	authTokens := utils.AuthTokens(r)
 	if len(authTokens) == 0 {
 		l.Info("no auth tokens in request")
+		return "", nil
 	} else {
 		l.WithField("auth_tokens", authTokens).Debug("auth tokens in request, searching for most granular")
 		var token string
@@ -159,15 +157,40 @@ func requestClaims(r *http.Request, resource string) (jwt.MapClaims, error) {
 			l.Error("no auth token found")
 		}
 		if token != "" {
-			_, claims, err = auth.ValidateJWT(token)
-			if err != nil {
-				l.WithError(err).Error("Failed to validate JWT")
-				//http.Error(w, err.Error(), http.StatusUnauthorized)
-				//return
-				token = ""
-			}
-			l.WithField("claims", claims).Debug("JWT validated")
+			l.WithField("token", token).Debug("found token")
+			return token, nil
 		}
+	}
+	l.Debug("end")
+	return "", nil
+}
+
+func requestClaims(r *http.Request, resource string) (jwt.MapClaims, error) {
+	l := log.WithFields(log.Fields{
+		"action": "requestClaims",
+	})
+	l.Debug("start")
+	defer l.Debug("end")
+	var claims jwt.MapClaims
+	var err error
+	var token string
+	token, err = requestToken(r, resource)
+	if err != nil {
+		l.WithError(err).Error("Failed to request token")
+		return nil, err
+	}
+	if token != "" {
+		_, claims, err = auth.ValidateJWT(token)
+		if err != nil {
+			l.WithError(err).Error("Failed to validate JWT")
+			//http.Error(w, err.Error(), http.StatusUnauthorized)
+			//return
+			token = ""
+		}
+		l.WithField("claims", claims).Debug("JWT validated")
+	} else {
+		l.Debug("no token found")
+		return nil, nil
 	}
 	return claims, err
 }
@@ -192,6 +215,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
 	renewReq := r.URL.Query().Get(utils.HeaderPrefix()+"renew") != ""
+	nocache := r.Header.Get(utils.HeaderPrefix()+"no-cache") == "true"
 	if strings.Contains(resource, utils.HeaderPrefix()+"renew=true") {
 		renewReq = true
 		resource = strings.Replace(resource, "?"+utils.HeaderPrefix()+"renew=true", "", 1)
@@ -219,7 +243,13 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	rd, herr := us.GetResourceMeta(resource)
+	rt, rerr := requestToken(r, resource)
+	if rerr != nil {
+		l.WithError(rerr).Error("Failed to request token")
+		http.Error(w, "Failed to request token", http.StatusInternalServerError)
+		return
+	}
+	rd, herr := us.GetResourceMeta(resource, rt, nocache)
 	if herr != nil {
 		l.WithError(herr).Error("Failed to get headers")
 		http.Error(w, "Failed to get headers", http.StatusInternalServerError)
@@ -292,6 +322,11 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 			pr.Address = newWallet.Address
 		}
 	}
+	l.WithFields(log.Fields{
+		"renewReq":    renewReq,
+		"claimsValid": claimsValid,
+	})
+	l.Debug("Checking renew claims")
 	if renewReq && claimsValid {
 		l.Debug("renewal request")
 		var expc float64
