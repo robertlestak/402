@@ -252,7 +252,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to request token", http.StatusInternalServerError)
 		return
 	}
-	rd, herr := us.GetResourceMeta(resource, rt, enableCache)
+	rd, herr := us.GetResourceMetaService(resource, rt, enableCache)
 	if herr != nil {
 		l.WithError(herr).Error("Failed to get headers")
 		http.Error(w, "Failed to get headers", http.StatusInternalServerError)

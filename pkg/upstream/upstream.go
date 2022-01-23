@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -48,6 +49,13 @@ type Upstream struct {
 	Endpoint *string           `gorm:"not null" json:"endpoint" yaml:"endpoint"`
 	Method   *HPayMethod       `gorm:"not null" json:"method" yaml:"method"`
 	Selector *UpstreamSelector `gorm:"type:jsonb" json:"selector" yaml:"selector"`
+}
+
+type UpstreamMetaRequest struct {
+	Upstream *Upstream
+	Resource string
+	Cache    bool
+	Token    string
 }
 
 func (a UpstreamSelector) Value() (driver.Value, error) {
@@ -286,6 +294,96 @@ func (u *Upstream) GetResourceMeta(r string, token string, enableCache bool) (ma
 		l.Errorf("Unknown method: %s", *u.Method)
 		return nil, errors.New("unknown method")
 	}
+}
+
+// GetResourceMetaService returns the meta data for the resource
+func (u *Upstream) GetResourceMetaService(r string, token string, enableCache bool) (map[string]string, error) {
+	l := log.WithFields(log.Fields{
+		"action":    "Upstream.GetResourceMetaService",
+		"resource":  r,
+		"withToken": token != "",
+	})
+	l.Debug("start")
+	if os.Getenv("UPSTREAM_META_SERVICE") == "" {
+		l.Error("UPSTREAM_META_SERVICE not set, making upstream request from local")
+		return u.GetResourceMeta(r, token, enableCache)
+	}
+	ur := &UpstreamMetaRequest{
+		Upstream: u,
+		Resource: r,
+		Token:    token,
+		Cache:    enableCache,
+	}
+	jd, jerr := json.Marshal(ur)
+	if jerr != nil {
+		l.Errorf("Failed to marshal json: %s", jerr)
+		return nil, jerr
+	}
+	l.Debugf("Making request to %s", os.Getenv("UPSTREAM_META_SERVICE"))
+	l.Debugf("Request: %s", string(jd))
+	c := &http.Client{}
+	req, err := http.NewRequest("POST", os.Getenv("UPSTREAM_META_SERVICE")+"/upstream", bytes.NewBuffer(jd))
+	if err != nil {
+		l.Errorf("Failed to create request: %s", err)
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.Do(req)
+	if err != nil {
+		l.Errorf("Failed to send request: %s", err)
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		l.Errorf("Failed to get response: %s", resp.Status)
+		return nil, errors.New(resp.Status)
+	}
+	defer resp.Body.Close()
+	var meta map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
+		l.Errorf("Failed to decode response: %s", err)
+		return nil, err
+	}
+	l.Debug("end")
+	return meta, nil
+}
+
+func HandleGetResourceMeta(w http.ResponseWriter, r *http.Request) {
+	l := log.WithFields(log.Fields{
+		"action": "HandleGetResourceMeta",
+	})
+	l.Debug("start")
+	mr := &UpstreamMetaRequest{}
+	defer r.Body.Close()
+	if err := json.NewDecoder(r.Body).Decode(mr); err != nil {
+		l.Errorf("Error decoding request: %s", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	l.Debugf("Request: %+v", mr)
+	if mr.Resource == "" {
+		l.Error("No resource specified")
+		http.Error(w, "No resource specified", http.StatusBadRequest)
+		return
+	}
+	if mr.Upstream == nil {
+		l.Error("No upstream specified")
+		http.Error(w, "No upstream specified", http.StatusBadRequest)
+		return
+	}
+	um, err := mr.Upstream.GetResourceMeta(mr.Resource, mr.Token, mr.Cache)
+	if err != nil {
+		l.Errorf("Error getting resource meta: %s", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	l.Debugf("Response: %+v", um)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(um); err != nil {
+		l.Errorf("Error encoding response: %s", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	l.Debug("end")
 }
 
 // filterMeta filters the meta data for the resource to return

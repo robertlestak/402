@@ -1,0 +1,42 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hpay-upstream-v1
+  namespace: humun-client-svcs
+  labels:
+    app: hpay-upstream
+    component: upstream-server
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hpay-upstream
+      component: upstream-server
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: hpay-upstream
+        component: upstream-server
+        version: v1
+    spec:
+      serviceAccountName: hpay
+      containers:
+      - name: humun
+        image: registry.lestak.sh/402:v0.0.1
+        args:
+        - upstream-server
+        resources:
+          limits:
+            memory: 1000Mi
+            cpu: 1000m
+          requests:
+            memory: 500Mi
+            cpu: 50m
+        ports:
+        - containerPort: 80
+        envFrom:
+        - secretRef:
+            name: hpay-v1

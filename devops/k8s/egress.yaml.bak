@@ -1,0 +1,27 @@
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: 402-default-deny
+  namespace: humun-client-svcs
+spec:
+  podSelector:
+    matchLabels:
+      app: hpay
+  policyTypes:
+  - Egress
+
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: 402-egress-external
+  namespace: humun-client-svcs
+spec:
+  podSelector:
+    matchLabels:
+      app: hpay
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0

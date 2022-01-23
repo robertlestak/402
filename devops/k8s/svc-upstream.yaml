@@ -1,0 +1,17 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hpay-upstream
+  namespace: humun-client-svcs
+  labels:
+    app: hpay-upstream
+spec:
+  type: ClusterIP
+  selector:
+    app: hpay-upstream
+  ports:
+    - protocol: TCP
+      port: 80
+      name: http
+      targetPort: 80
