@@ -259,12 +259,14 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	tenant := vars["tenant"]
 	if tenant == "" {
 		l.Error("tenant is empty")
+		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
 		http.Error(w, "tenant is empty", http.StatusBadRequest)
 		return
 	}
 	tenant = utils.TenantName(tenant)
 	if tenant == os.Getenv("DEFAULT_TENANT") || tenant == os.Getenv("ROOT_TENANT") || tenant == "402" {
 		l.Error("tenant is not allowed")
+		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
 		http.Error(w, "tenant is not allowed", http.StatusBadRequest)
 		return
 	}
@@ -276,12 +278,14 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	ap := &AccessPlan{Name: plan}
 	if err := ap.GetByName(); err != nil {
 		l.Error("error getting access plan: ", err)
+		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
 		http.Error(w, "error getting access plan", http.StatusInternalServerError)
 		return
 	}
 	t := &Tenant{Name: tenant}
 	if err := t.GetByName(); err != nil && err != gorm.ErrRecordNotFound {
 		l.Error("error getting tenant: ", err)
+		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
 		http.Error(w, "error getting tenant", http.StatusInternalServerError)
 		return
 	}
@@ -289,12 +293,14 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	l.WithField("tenant", t).Debug("tenant found")
 	if t.ID != 0 && !auth.RequestAuthorized(r) {
 		l.Debug("unauthorized")
+		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	req, err := t.PaymentRequest(ap)
 	if err != nil {
 		l.Error("error getting payment request: ", err)
+		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
 		http.Error(w, "error getting payment request", http.StatusInternalServerError)
 		return
 	}
