@@ -1,0 +1,75 @@
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: 402-default-deny
+  namespace: humun-client-svcs
+spec:
+  podSelector:
+    matchLabels:
+      app: hpay-upstream
+  policyTypes:
+  - Egress
+
+---
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: 402-egress-core
+  namespace: humun-client-svcs
+spec:
+  podSelector:
+    matchLabels:
+      app: hpay-upstream
+  egress:
+  # kube-dns required for DNS resolution
+  # we use the cluster-internal DNS rather than setting the pod
+  # resolver to public so that we can support internal upstreams
+  # however for security, internal upstreams should get their own
+  # granular net policies
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+  - to:
+    # istiod is required for istio-envoy internal communications
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: istio-system
+      podSelector:
+        matchLabels:
+          app: istiod
+    ports:
+    - port: 15012
+      protocol: TCP
+  - to:
+    # 402 redis required to get and set upstream cache data
+    - podSelector:
+        matchLabels:
+          app: hpay-redis
+    ports:
+    - port: 6379
+  - to:
+    # 402 service required to enable dogfooding
+    - podSelector:
+        matchLabels:
+          app: hpay
+    ports:
+    - port: 80
+  - to:
+    # allow egress to 0.0.0.0/0, excluding RFC1918. Any traffic destined
+    # for internal resources must match a more granular NetworkPolicy or be denied
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
