@@ -13,17 +13,18 @@ import (
 	"github.com/robertlestak/hpay/internal/pubsub"
 	"github.com/robertlestak/hpay/internal/utils"
 	"github.com/robertlestak/hpay/pkg/hpay"
+	"github.com/robertlestak/hpay/pkg/meta"
 	"github.com/robertlestak/hpay/pkg/payment"
 	"github.com/robertlestak/hpay/pkg/upstream"
 	log "github.com/sirupsen/logrus"
 )
 
-func decryptMetaFromPayment(payment *payment.Payment) (hpay.Meta, error) {
+func decryptMetaFromPayment(payment *payment.Payment) (meta.Meta, error) {
 	l := log.WithFields(log.Fields{
 		"action": "decryptMetaFromPayment",
 	})
 	l.Info("start")
-	meta := hpay.Meta{}
+	meta := meta.Meta{}
 	if payment.EncryptedMeta == "" {
 		l.Error("encrypted meta is empty")
 		return meta, errors.New("encrypted meta is empty")
@@ -68,7 +69,7 @@ func addPaymentRequestJob(id string, payment *payment.Payment, pr *payment.Payme
 	return nil
 }
 
-func waitForConfirmation(id string, conn *websocket.Conn, subscriber *redis.PubSub, meta hpay.Meta, payment *payment.Payment) error {
+func waitForConfirmation(id string, conn *websocket.Conn, subscriber *redis.PubSub, meta meta.Meta, payment *payment.Payment) error {
 	l := log.WithFields(log.Fields{"func": "waitForConfirmation"})
 	l.Info("start")
 	for {

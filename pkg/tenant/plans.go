@@ -20,9 +20,11 @@ type AccessPlanAmount struct {
 
 type AccessPlan struct {
 	gorm.Model
-	Name              string              `gorm:"unique_index" json:"name"`
-	Description       string              `json:"description"`
-	Expiry            int                 `json:"expiry"`
+	Name              string `gorm:"unique_index" json:"name"`
+	Description       string `json:"description"`
+	Expiry            int    `json:"expiry"`
+	RequestsPerMinute int
+	RequestsPerDay    int
 	AccessPlanAmounts []*AccessPlanAmount `json:"amount"`
 }
 

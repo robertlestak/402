@@ -1,0 +1,35 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app: hpay-reset-minute
+  name: hpay-reset-minute
+  namespace: humun-client-svcs
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata:
+      labels:
+        app: hpay-reset-minute
+    spec:
+      template:
+        metadata:
+          annotations:
+            sidecar.istio.io/inject: "false"
+        spec:
+          containers:
+          - image: registry.lestak.sh/402:v0.0.1
+            args:
+            - "cli"
+            - "reset-usage"
+            - "minute"
+            envFrom:
+            - secretRef:
+                name: hpay-v1
+            imagePullPolicy: IfNotPresent
+            name: hpay-reset-minute
+          restartPolicy: OnFailure
+  schedule: "* * * * *"
+  successfulJobsHistoryLimit: 1

@@ -1,0 +1,35 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app: hpay-reset-daily
+  name: hpay-reset-daily
+  namespace: humun-client-svcs
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    metadata:
+      labels:
+        app: hpay-reset-daily
+    spec:
+      template:
+        metadata:
+          annotations:
+            sidecar.istio.io/inject: "false"
+        spec:
+          containers:
+          - image: registry.lestak.sh/402:v0.0.1
+            args:
+            - "cli"
+            - "reset-usage"
+            - "day"
+            envFrom:
+            - secretRef:
+                name: hpay-v1
+            imagePullPolicy: IfNotPresent
+            name: hpay-reset-daily
+          restartPolicy: OnFailure
+  schedule: 0 0 * * *
+  successfulJobsHistoryLimit: 1

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -13,7 +14,7 @@ import (
 	"github.com/robertlestak/hpay/internal/db"
 	"github.com/robertlestak/hpay/internal/utils"
 	"github.com/robertlestak/hpay/pkg/auth"
-	"github.com/robertlestak/hpay/pkg/hpay"
+	"github.com/robertlestak/hpay/pkg/meta"
 	"github.com/robertlestak/hpay/pkg/payment"
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
@@ -24,6 +25,91 @@ type Tenant struct {
 	Name         string `gorm:"unique_index"`
 	Email        string
 	AccessPlanID uint
+	Usage        *TenantUsage
+}
+
+type TenantUsage struct {
+	gorm.Model
+	TenantID         uint `gorm:"unique_index"`
+	RequestsInMinute int
+	RequestsInDay    int
+}
+
+type UsageReport struct {
+	AccessPlan *AccessPlan
+	Usage      *TenantUsage
+}
+
+func GlobalResetUsage(t string) error {
+	l := log.WithFields(log.Fields{
+		"func":      "GlobalResetUsage",
+		"timeframe": t,
+	})
+	l.Println("start")
+	if t == "" {
+		return fmt.Errorf("timeframe is required")
+	}
+	if t == "day" {
+		return db.DB.Exec("UPDATE tenant_usages SET requests_in_day = 0").Error
+	}
+	if t == "minute" {
+		return db.DB.Exec("UPDATE tenant_usages SET requests_in_minute = 0").Error
+	}
+	return nil
+}
+
+func (t *Tenant) CreateUsage(db *gorm.DB) error {
+	l := log.WithFields(log.Fields{
+		"func": "CreateUsage",
+	})
+	l.Println("start")
+	cu := &TenantUsage{
+		TenantID: t.ID,
+	}
+	if db.Model(cu).Save(cu).Error != nil {
+		return fmt.Errorf("failed to create usage")
+	}
+	return nil
+}
+
+func (t *Tenant) GetUsage(db *gorm.DB) (*UsageReport, error) {
+	l := log.WithFields(log.Fields{
+		"func": "GetUsage",
+	})
+	l.Println("start")
+	if t.ID == 0 {
+		if err := t.GetByName(); err != nil {
+			return nil, err
+		}
+	}
+	cu := &TenantUsage{}
+	if db.Model(cu).First(cu, "tenant_id = ?", t.ID).Error != nil {
+		return nil, fmt.Errorf("failed to get usage")
+	}
+	up := &AccessPlan{}
+	if db.Model(up).First(up, "id = ?", t.AccessPlanID).Error != nil {
+		return nil, fmt.Errorf("failed to get usage plan")
+	}
+	return &UsageReport{
+		AccessPlan: up,
+		Usage:      cu,
+	}, nil
+}
+
+func (t *Tenant) Use(count int) error {
+	ur, err := t.GetUsage(db.DB)
+	if err != nil {
+		return err
+	}
+	t.Usage = ur.Usage
+	if t.Usage.RequestsInMinute+count > ur.AccessPlan.RequestsPerMinute && ur.AccessPlan.RequestsPerMinute != 0 {
+		return fmt.Errorf("per-minute usage limit exceeded, consider upgrading")
+	} else if t.Usage.RequestsInDay+count > ur.AccessPlan.RequestsPerDay && ur.AccessPlan.RequestsPerDay != 0 {
+		return fmt.Errorf("daily usage limit exceeded, consider upgrading")
+	}
+	t.Usage.RequestsInMinute += count
+	t.Usage.RequestsInDay += count
+	return db.DB.Save(t.Usage).Error
 }
 
 func (t *Tenant) Validate() error {
@@ -50,7 +136,10 @@ func (t *Tenant) Validate() error {
 }
 
 func (t *Tenant) Create() error {
-	return db.DB.Create(t).Error
+	if cerr := db.DB.Create(t).Error; cerr != nil {
+		return cerr
+	}
+	return t.CreateUsage(db.DB)
 }
 
 func (t *Tenant) Update() error {
@@ -206,6 +295,55 @@ func HandleGetTenant(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func HandleGetTenantUsage(w http.ResponseWriter, r *http.Request) {
+	l := log.WithFields(log.Fields{
+		"package": "tenant",
+		"action":  "HandleGetTenantUsage",
+	})
+	l.Debug("start")
+	defer l.Debug("end")
+	vars := mux.Vars(r)
+	tenant := vars["tenant"]
+	t := &Tenant{Name: tenant}
+	if err := t.GetByName(); err != nil && err != gorm.ErrRecordNotFound {
+		l.Error("error getting tenant: ", err)
+		http.Error(w, "error getting tenant", http.StatusInternalServerError)
+		return
+	} else if err == gorm.ErrRecordNotFound {
+		l.WithField("tenant", tenant).Debug("tenant not found")
+		http.Error(w, "tenant not found", http.StatusNotFound)
+		return
+	}
+	r.Header.Set(utils.HeaderPrefix()+"tenant", tenant)
+	if !auth.RequestAuthorized(r) {
+		l.Debug("unauthorized")
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if t.AccessPlanID == 0 {
+		l.WithField("tenant", t).Debug("tenant has no access plan")
+		http.Error(w, "tenant has no access plan", http.StatusNotFound)
+		return
+	}
+	l.WithField("tenant", t).Debug("tenant found")
+	if uerr := t.Use(1); uerr != nil {
+		l.Error("error updating tenant usage: ", uerr)
+		http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+		return
+	}
+	r.Header.Set("Content-Type", "application/json")
+	ur, err := t.GetUsage(db.DB)
+	if err != nil {
+		l.Error("error getting usage: ", err)
+		http.Error(w, "error getting usage", http.StatusInternalServerError)
+		return
+	}
+	if jerr := json.NewEncoder(w).Encode(ur); jerr != nil {
+		l.Error("error encoding usage: ", jerr)
+		http.Error(w, "error encoding usage", http.StatusInternalServerError)
+	}
+}
+
 func (t *Tenant) PaymentRequest(ap *AccessPlan) (string, error) {
 	l := log.WithFields(log.Fields{
 		"package":    "tenant",
@@ -219,7 +357,7 @@ func (t *Tenant) PaymentRequest(ap *AccessPlan) (string, error) {
 		l.Error("name is empty")
 		return "", errors.New("name is empty")
 	}
-	req := &hpay.Meta{
+	req := &meta.Meta{
 		Claims: jwt.MapClaims{
 			"sub": t.Name,
 			"pid": ap.Name,
@@ -227,7 +365,7 @@ func (t *Tenant) PaymentRequest(ap *AccessPlan) (string, error) {
 		},
 		Renewable: true,
 		Payment: &payment.Payment{
-			Tenant: t.Name,
+			Tenant: os.Getenv("ROOT_TENANT"),
 		},
 	}
 	if ap.Expiry > 0 {
@@ -260,6 +398,7 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	if tenant == "" {
 		l.Error("tenant is empty")
 		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
+		w.Header().Set(utils.HeaderPrefix()+"required", "true")
 		http.Error(w, "tenant is empty", http.StatusBadRequest)
 		return
 	}
@@ -267,6 +406,7 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	if tenant == os.Getenv("DEFAULT_TENANT") || tenant == os.Getenv("ROOT_TENANT") || tenant == "402" {
 		l.Error("tenant is not allowed")
 		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
+		w.Header().Set(utils.HeaderPrefix()+"required", "true")
 		http.Error(w, "tenant is not allowed", http.StatusBadRequest)
 		return
 	}
@@ -279,6 +419,7 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	if err := ap.GetByName(); err != nil {
 		l.Error("error getting access plan: ", err)
 		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
+		w.Header().Set(utils.HeaderPrefix()+"required", "true")
 		http.Error(w, "error getting access plan", http.StatusInternalServerError)
 		return
 	}
@@ -286,6 +427,7 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	if err := t.GetByName(); err != nil && err != gorm.ErrRecordNotFound {
 		l.Error("error getting tenant: ", err)
 		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
+		w.Header().Set(utils.HeaderPrefix()+"required", "true")
 		http.Error(w, "error getting tenant", http.StatusInternalServerError)
 		return
 	}
@@ -294,6 +436,7 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	if t.ID != 0 && !auth.RequestAuthorized(r) {
 		l.Debug("unauthorized")
 		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
+		w.Header().Set(utils.HeaderPrefix()+"required", "true")
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -301,6 +444,7 @@ func HandleHeadPaymentRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		l.Error("error getting payment request: ", err)
 		w.Header().Set(utils.HeaderPrefix()+"cache", "false")
+		w.Header().Set(utils.HeaderPrefix()+"required", "true")
 		http.Error(w, "error getting payment request", http.StatusInternalServerError)
 		return
 	}

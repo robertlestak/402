@@ -634,6 +634,27 @@ data:
                 $ref: "#/definitions/Tenant"
             "500":
               description: "Internal Server Error"
+      /tenants/{tenant}/usage:
+        get:
+          tags:
+          - "multi-tenant"
+          summary: "Retrieve usage report for current tenant"
+          description: ""
+          operationId: "tenant.HandleGetTenantUsage"
+          security:
+          - Bearer: []
+          parameters:
+          - in: path
+            name: tenant
+            type: string
+            required: true
+          responses:
+            "200":
+              description: "OK"
+              schema:
+                $ref: "#/definitions/UsageReport"
+            "500":
+              description: "Internal Server Error"
         
 
     definitions:
@@ -673,6 +694,22 @@ data:
                   type: string
                 amount:
                   type: number
+      UsageReport:
+        type: object
+        properties:
+          Usage:
+            $ref: "#/definitions/TenantUsage"
+          AccessPlan:
+            $ref: "#/definitions/Plan"
+            
+      TenantUsage:
+        type: object
+        properties:
+          RequestsPerMinute:
+            type: integer
+          RequestsPerDay:
+            type: integer
+          
       Upstream:
         type: object
         properties:

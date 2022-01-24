@@ -52,6 +52,7 @@ func Server() error {
 	r.HandleFunc(apiPathPrefix("/payments"), payment.HandleListPaymentsForTenant).Methods("GET")
 
 	r.HandleFunc(apiPathPrefix("/tenants/{tenant}/"), tenant.HandleGetTenant).Methods("GET")
+	r.HandleFunc(apiPathPrefix("/tenants/{tenant}/usage"), tenant.HandleGetTenantUsage).Methods("GET")
 	r.HandleFunc(apiPathPrefix("/tenants/{tenant}/"), tenant.HandleCreateTenant).Methods("POST")
 	r.HandleFunc(apiPathPrefix("/tenants/{tenant}/"), tenant.HandleHeadPaymentRequest).Methods("HEAD")
 	r.HandleFunc(apiPathPrefix("/tenants/{tenant}/{plan}"), tenant.HandleGetTenant).Methods("GET")

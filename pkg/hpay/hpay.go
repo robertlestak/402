@@ -13,34 +13,13 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/robertlestak/hpay/internal/utils"
 	"github.com/robertlestak/hpay/pkg/auth"
+	"github.com/robertlestak/hpay/pkg/meta"
 	"github.com/robertlestak/hpay/pkg/payment"
+	"github.com/robertlestak/hpay/pkg/tenant"
 	"github.com/robertlestak/hpay/pkg/upstream"
 	"github.com/robertlestak/hpay/pkg/vault"
 	log "github.com/sirupsen/logrus"
 )
-
-// Meta is the primary struct for a 402 request
-type Meta struct {
-	Claims        jwt.MapClaims    `json:"claims"`
-	Exp           time.Duration    `json:"exp"`
-	Renewable     bool             `json:"renewable"`
-	Payment       *payment.Payment `json:"payment"`
-	Customization Customization    `json:"customization"`
-	UpstreamID    uint             `json:"upstream_id"`
-}
-
-// Customization contains data the upstream can provide to customize the payment page
-type Customization struct {
-	JS    string `json:"js"`
-	CSS   string `json:"css"`
-	Image string `json:"image"`
-}
-
-// Page is the template for the payment page
-type Page struct {
-	Meta  *Meta  `json:"meta"`
-	WSURL string `json:"ws_url"`
-}
 
 // ValidateRequestedClaims validates the requested claims against any configured protected claims
 func ValidateRequestedClaims(claims jwt.MapClaims, us *upstream.Upstream) error {
@@ -66,35 +45,8 @@ func ValidateRequestedClaims(claims jwt.MapClaims, us *upstream.Upstream) error 
 	return nil
 }
 
-// GenerateToken generates a JWT token for the provided payment request
-func (m *Meta) GenerateToken() (string, error) {
-	l := log.WithFields(log.Fields{
-		"action": "GenerateToken",
-	})
-	l.Debug("start")
-	defer l.Debug("end")
-	var exp time.Time
-	if m.Exp > 0 {
-		exp = time.Now().Add(m.Exp)
-	}
-	if _, ok := m.Claims["iss"]; !ok && m.Payment.Tenant != "" {
-		m.Claims["iss"] = m.Payment.Tenant
-	}
-	if _, ok := m.Claims["tid"]; !ok && m.Payment.Tenant != "" {
-		m.Claims["tid"] = m.Payment.Tenant
-	}
-	token, err := auth.GenerateJWT(m.Claims, exp, utils.TokenKeyID())
-	if err != nil {
-		l.Error(err)
-		return "", err
-	}
-	l.WithField("token", token).Debug("Generated token")
-	m.Payment.Token = token
-	return token, nil
-}
-
 // parseMeta parses the provided map[string]string for any configured payment meta fields
-func parseMeta(h map[string]string) (*Meta, error) {
+func parseMeta(h map[string]string) (*meta.Meta, error) {
 	l := log.WithFields(log.Fields{
 		"action": "parseMeta",
 	})
@@ -114,13 +66,13 @@ func parseMeta(h map[string]string) (*Meta, error) {
 	if metaBase64Str == "" {
 		return nil, errors.New("no meta header")
 	}
-	meta, err := base64.StdEncoding.DecodeString(metaBase64Str)
+	metaD, err := base64.StdEncoding.DecodeString(metaBase64Str)
 	if err != nil {
 		l.WithError(err).Error("Failed to decode meta header")
 		return nil, err
 	}
-	var metaObj Meta
-	if err := json.Unmarshal(meta, &metaObj); err != nil {
+	var metaObj meta.Meta
+	if err := json.Unmarshal(metaD, &metaObj); err != nil {
 		l.WithError(err).Error("Failed to unmarshal meta header")
 		return nil, err
 	}
@@ -213,7 +165,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "no resource")
 		return
 	}
-	tenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
+	tenantStr := r.Header.Get(utils.HeaderPrefix() + "tenant")
 	renewReq := r.URL.Query().Get(utils.HeaderPrefix()+"renew") != ""
 	enableCache := true
 	if r.Header.Get(utils.HeaderPrefix()+"cache") != "" {
@@ -259,40 +211,40 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l.WithField("resourceMeta", rd).Debug("Got resourceMeta")
-	meta, merr := parseMeta(rd)
+	metaD, merr := parseMeta(rd)
 	if merr != nil {
 		l.WithError(merr).Error("Failed to parse meta")
-		http.Error(w, "Failed to parse meta", http.StatusInternalServerError)
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
-	if meta == nil {
+	if metaD == nil {
 		l.Debug("no payment required")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 	var claimsValid bool
-	meta.UpstreamID = us.ID
-	l.WithField("meta", meta).Debug("Got meta")
-	if meta.Payment.Tenant == "" && tenant != "" {
-		meta.Payment.Tenant = tenant
-	} else if meta.Payment.Tenant == "" && tenant == "" {
-		meta.Payment.Tenant = os.Getenv("DEFAULT_TENANT")
-		l.WithField("tenant", meta.Payment.Tenant).Debug("No tenant provided, using default")
+	metaD.UpstreamID = us.ID
+	l.WithField("meta", metaD).Debug("Got meta")
+	if metaD.Payment.Tenant == "" && tenantStr != "" {
+		metaD.Payment.Tenant = tenantStr
+	} else if metaD.Payment.Tenant == "" && tenantStr == "" {
+		metaD.Payment.Tenant = os.Getenv("DEFAULT_TENANT")
+		l.WithField("tenant", metaD.Payment.Tenant).Debug("No tenant provided, using default")
 	}
-	if cerr := ValidateRequestedClaims(meta.Claims, us); cerr != nil {
+	if cerr := ValidateRequestedClaims(metaD.Claims, us); cerr != nil {
 		l.Error("requested claims not valid for request")
 		http.Error(w, "requested claims not valid for request", http.StatusUnauthorized)
 		return
 	}
 	//meta.Claims["tid"] = meta.Payment.Tenant
 	//meta.Claims["iss"] = meta.Payment.Tenant
-	if renewReq && !meta.Renewable {
+	if renewReq && !metaD.Renewable {
 		l.Debug("renew request on non-renewable resource")
 		renewReq = false
 	}
 	if claims != nil {
 		l.WithField("claims", claims).Debug("claims found")
-		if verr := auth.ValidateClaims(claims, meta.Claims); verr != nil {
+		if verr := auth.ValidateClaims(claims, metaD.Claims); verr != nil {
 			l.Error("claims not valid")
 			claimsValid = false
 		} else if !renewReq {
@@ -305,17 +257,27 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	} else {
 		l.Debug("no claims")
 	}
-	if tid, ok := claims["tid"]; ok && tid != "" && tid != meta.Payment.Tenant {
-		l.WithField("tenant", meta.Payment.Tenant).Debug("Tenant mismatch")
+	if tid, ok := claims["tid"]; ok && tid != "" && tid != metaD.Payment.Tenant {
+		l.WithField("tenant", metaD.Payment.Tenant).Debug("Tenant mismatch")
 		http.Error(w, "Tenant mismatch", http.StatusUnauthorized)
 		return
 	}
-	l.WithField("requests", meta.Payment.Requests).Debug("Got requests")
+	if os.Getenv("ENABLE_METERED_USAGE") == "true" && metaD.Payment.Tenant != os.Getenv("ROOT_TENANT") {
+		tnt := &tenant.Tenant{
+			Name: metaD.Payment.Tenant,
+		}
+		if uerr := tnt.Use(1); uerr != nil {
+			l.WithError(uerr).Error("Failed to use tenant")
+			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+			return
+		}
+	}
+	l.WithField("requests", metaD.Payment.Requests).Debug("Got requests")
 	// loop through payment requests to create addrs if necessary
-	for _, pr := range meta.Payment.Requests {
+	for _, pr := range metaD.Payment.Requests {
 		// if site owner has not provided static address, create one. This is the recommended approach.
 		if pr.Address == "" && os.Getenv("VAULT_ENABLE") == "true" {
-			newWallet, werr := vault.NewTenantWallet(meta.Payment.Tenant, pr.Network)
+			newWallet, werr := vault.NewTenantWallet(metaD.Payment.Tenant, pr.Network)
 			if werr != nil {
 				l.WithError(werr).Error("Failed to create wallet")
 				http.Error(w, "Failed to create wallet", http.StatusInternalServerError)
@@ -339,11 +301,11 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		if expc > 0 {
 			ut := time.Unix(int64(expc), 0)
-			meta.Exp = time.Duration(meta.Exp.Nanoseconds() + time.Until(ut).Nanoseconds())
-			l.WithField("expiry", meta.Exp).Debug("updating expiry")
+			metaD.Exp = time.Duration(metaD.Exp.Nanoseconds() + time.Until(ut).Nanoseconds())
+			l.WithField("expiry", metaD.Exp).Debug("updating expiry")
 		}
 	}
-	mjson, err := json.Marshal(meta)
+	mjson, err := json.Marshal(metaD)
 	if err != nil {
 		l.WithError(err).Error("Failed to marshal meta")
 		http.Error(w, "Failed to marshal meta", http.StatusInternalServerError)
@@ -355,65 +317,19 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encrypt meta", http.StatusInternalServerError)
 		return
 	}
-	meta.Payment.EncryptedMeta = base64.StdEncoding.EncodeToString(em)
-	if mherr := meta.Payment.CreateMetaHash(); mherr != nil {
+	metaD.Payment.EncryptedMeta = base64.StdEncoding.EncodeToString(em)
+	if mherr := metaD.Payment.CreateMetaHash(); mherr != nil {
 		l.WithError(mherr).Error("Failed to create meta hash")
 		http.Error(w, "Failed to create meta hash", http.StatusInternalServerError)
 		return
 	}
-	l.WithField("meta", meta).Debug("Encrypted meta")
-	pageData := &Page{
-		Meta:  meta,
+	l.WithField("meta", metaD).Debug("Encrypted meta")
+	pageData := &meta.Page{
+		Meta:  metaD,
 		WSURL: os.Getenv("WS_URL"),
 	}
 	w.WriteHeader(http.StatusPaymentRequired)
 	payment.TemplatedPage(w, pageData, "402.html")
-}
-
-// Decrypt decrypts the encrypted meta object
-func (m *Meta) Decrypt(encrypted string) error {
-	l := log.WithFields(log.Fields{
-		"action": "Decrypt",
-	})
-	l.Debug("start")
-	defer l.Debug("end")
-	if encrypted == "" {
-		l.Debug("end")
-		return nil
-	}
-
-	bd, berr := utils.DecryptWithPrivateKey([]byte(encrypted), utils.MessageKeyID())
-	if berr != nil {
-		l.WithError(berr).Error("Failed to decrypt")
-		return berr
-	}
-	decoded, err := base64.StdEncoding.DecodeString(string(bd))
-	if err != nil {
-		l.WithError(err).Error("Failed to decode")
-		return err
-	}
-	l.WithField("decrypted", string(decoded)).Debug("Decrypted")
-	if err := json.Unmarshal(decoded, &m); err != nil {
-		l.WithError(err).Error("Failed to unmarshal")
-		return err
-	}
-	l.WithField("meta", m).Debug("Unmarshaled")
-	l.Debug("end")
-	return nil
-}
-
-// ValidatePayment validates the payment request
-func (m *Meta) ValidatePayment() error {
-	l := log.WithFields(log.Fields{
-		"action": "ValidatePayment",
-	})
-	l.Debug("start")
-	defer l.Debug("end")
-	if perr := m.Payment.Validate(); perr != nil {
-		l.WithError(perr).Error("Failed to validate payment")
-		return perr
-	}
-	return nil
 }
 
 // ValidateEncryptedPayment handles an untrusted payment request from a user. It will take the
@@ -447,7 +363,7 @@ func ValidateEncryptedPayment(requestId string, address string, network string, 
 		return err
 	}
 	l.WithField("decrypted", string(decrypted)).Debug("Decrypted")
-	var meta Meta
+	var meta meta.Meta
 	if err := json.Unmarshal(decrypted, &meta); err != nil {
 		l.WithError(err).Error("Failed to unmarshal")
 		return err

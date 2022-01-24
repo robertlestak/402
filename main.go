@@ -32,6 +32,7 @@ func coreUtils() {
 	db.DB.AutoMigrate(&tenant.Tenant{})
 	db.DB.AutoMigrate(&tenant.AccessPlan{})
 	db.DB.AutoMigrate(&tenant.AccessPlanAmount{})
+	db.DB.AutoMigrate(&tenant.TenantUsage{})
 	if uuerr := upstream.Init(); uuerr != nil {
 		l.WithError(uuerr).Fatal("Failed to initialize upstreams")
 	}

@@ -16,7 +16,7 @@ import (
 	"github.com/robertlestak/hpay/internal/pubsub"
 	"github.com/robertlestak/hpay/internal/utils"
 	"github.com/robertlestak/hpay/pkg/auth"
-	"github.com/robertlestak/hpay/pkg/hpay"
+	"github.com/robertlestak/hpay/pkg/meta"
 	"github.com/robertlestak/hpay/pkg/payment"
 	log "github.com/sirupsen/logrus"
 )
@@ -84,7 +84,7 @@ func handleAuth(id string, message *wsMessage) error {
 		}
 		return nil
 	}
-	meta := hpay.Meta{}
+	meta := meta.Meta{}
 	err = json.Unmarshal(decryptedMeta, &meta)
 	if err != nil {
 		l.Error("unmarshal meta:", err)

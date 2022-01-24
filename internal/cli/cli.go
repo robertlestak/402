@@ -7,8 +7,26 @@ import (
 
 	"github.com/golang-jwt/jwt"
 	"github.com/robertlestak/hpay/pkg/auth"
+	"github.com/robertlestak/hpay/pkg/tenant"
 	"github.com/robertlestak/hpay/pkg/vault"
+	log "github.com/sirupsen/logrus"
 )
+
+func resetusage(tf string) error {
+	l := log.WithFields(log.Fields{
+		"action": "resetusage",
+	})
+	l.Info("start")
+	l.Info("Resetting usage for " + tf)
+	err := tenant.GlobalResetUsage(tf)
+	if err != nil {
+		l.WithError(err).Error("Failed to reset usage")
+		return err
+	}
+	l.Info("Reset usage for " + tf)
+	l.Info("end")
+	return nil
+}
 
 // Cli is the entrypoint func for cli operations
 func Cli() error {
@@ -44,6 +62,14 @@ func Cli() error {
 		}
 	case "vault":
 		if err := vault.Cli(); err != nil {
+			return err
+		}
+	case "reset-usage":
+		if len(os.Args) < 4 {
+			return fmt.Errorf("usage: 402 cli reset-usage <time-frame>")
+		}
+		tf := os.Args[3]
+		if err := resetusage(tf); err != nil {
 			return err
 		}
 	default:
