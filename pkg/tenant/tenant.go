@@ -31,8 +31,8 @@ type Tenant struct {
 type TenantUsage struct {
 	gorm.Model
 	TenantID         uint `gorm:"unique_index"`
-	RequestsInMinute int
-	RequestsInDay    int
+	RequestsInMinute int  `json:"requests_in_minute"`
+	RequestsInDay    int  `json:"requests_in_day"`
 }
 
 type UsageReport struct {

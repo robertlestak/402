@@ -685,6 +685,12 @@ data:
             type: string
           description:
             type: string
+          expiry:
+            type: number
+          requests_per_minute:
+            type: number
+          requests_per_day:
+            type: number
           amount:
             type: array
             items:
@@ -705,9 +711,9 @@ data:
       TenantUsage:
         type: object
         properties:
-          RequestsPerMinute:
+          requests_in_minute:
             type: integer
-          RequestsPerDay:
+          requests_in_day:
             type: integer
           
       Upstream:
