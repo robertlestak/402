@@ -2,7 +2,7 @@ apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
   name: 402-auth
-  namespace: humun-client-svcs
+  namespace: humun-core
 spec:
   workloadSelector:
     labels:
@@ -82,6 +82,7 @@ spec:
                   [":path"] = "/v1/_402?resource="..path,
                   ["x-402-token"] = token,
                   ["x-402-tenant"] = "",
+                  ["cookie"] = c
                 },
                 nil,
                 5000)
