@@ -421,7 +421,7 @@ data:
       /plans:
         get:
           tags:
-          - "cloud"
+          - "multi-tenant"
           summary: "List access plans"
           description: ""
           operationId: "tenant.HandleListAccessPlans"
@@ -447,7 +447,7 @@ data:
               description: "Internal Server Error"
         post:
           tags:
-          - "cloud"
+          - "multi-tenant"
           summary: "Create / update access plan"
           description: ""
           operationId: "tenant.HandleCreateAccessPlan"
@@ -469,7 +469,7 @@ data:
               description: "Internal Server Error"
         delete:
           tags:
-          - "cloud"
+          - "multi-tenant"
           summary: "Delete access plan"
           description: ""
           operationId: "tenant.HandleDeleteAccessPlan"
@@ -489,7 +489,7 @@ data:
       /tenants/{tenant}:
         get:
           tags:
-          - "cloud"
+          - "multi-tenant"
           summary: "Get current tenant details"
           description: ""
           operationId: "tenant.HandleGetTenant"
@@ -509,7 +509,7 @@ data:
               description: "Internal Server Error"
         head:
           tags:
-          - "cloud"
+          - "multi-tenant"
           summary: "Get tenant payment request"
           description: ""
           operationId: "tenant.HandleHeadPaymentRequest"
@@ -525,7 +525,7 @@ data:
               description: "Internal Server Error"
         post:
           tags:
-          - "cloud"
+          - "multi-tenant"
           summary: "Create / update tenant"
           description: ""
           operationId: "tenant.HandleCreateTenant"
@@ -544,7 +544,7 @@ data:
       /tenants/{tenant}/{plan}:
         get:
           tags:
-          - "cloud"
+          - "multi-tenant"
           summary: "Get current tenant details"
           description: ""
           operationId: "tenant.HandleGetTenantPlan"
@@ -568,7 +568,7 @@ data:
               description: "Internal Server Error"
         head:
           tags:
-          - "cloud"
+          - "multi-tenant"
           summary: "Get tenant payment request"
           description: ""
           operationId: "tenant.HandleHeadPaymentRequestPlan"
@@ -588,7 +588,7 @@ data:
               description: "Internal Server Error"
         post:
           tags:
-          - "cloud"
+          - "multi-tenant"
           summary: "Create / update tenant"
           description: ""
           operationId: "tenant.HandleCreateTenantPlan"
@@ -611,7 +611,7 @@ data:
       /tenants/{tenant}/jwt:
         get:
           tags:
-          - "cloud"
+          - "multi-tenant"
           summary: "Generate a new token for tenant"
           description: ""
           operationId: "tenant.HandleGenerateNewJWT"
