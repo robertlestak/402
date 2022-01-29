@@ -166,7 +166,7 @@ func UpstreamForRequest(r *http.Request) (*Upstream, error) {
 		l.Error("No upstreams specified")
 		return nil, errors.New("no upstreams specified")
 	}
-	reqTenant := r.Header.Get(utils.HeaderPrefix() + "Tenant")
+	reqTenant := r.Header.Get(utils.HeaderPrefix() + "tenant")
 	if reqTenant == "" {
 		l.Error("No tenant specified, using DEFAULT_TENANT")
 		reqTenant = os.Getenv("DEFAULT_TENANT")

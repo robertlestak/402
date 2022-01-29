@@ -166,6 +166,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tenantStr := r.Header.Get(utils.HeaderPrefix() + "tenant")
+	l = l.WithField("tenant", tenantStr)
 	renewReq := r.URL.Query().Get(utils.HeaderPrefix()+"renew") != ""
 	enableCache := true
 	if r.Header.Get(utils.HeaderPrefix()+"cache") != "" {
