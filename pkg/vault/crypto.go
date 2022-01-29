@@ -49,11 +49,18 @@ func NewWallet() (*Wallet, error) {
 
 // NewTenantWallet creates a new wallet for a tenant and stores it to Vault
 func NewTenantWallet(tenant string, network string) (*Wallet, error) {
+	l := log.WithFields(log.Fields{
+		"tenant":  tenant,
+		"network": network,
+	})
+	l.Debug("NewTenantWallet")
 	if tenant == "" {
+		l.Error("NewTenantWallet no tenant")
 		return nil, errors.New("tenant is empty")
 	}
 	w, err := NewEphemeralWallet()
 	if err != nil {
+		l.Error("NewTenantWallet error")
 		return nil, err
 	}
 	w.Type = "address"
@@ -61,8 +68,10 @@ func NewTenantWallet(tenant string, network string) (*Wallet, error) {
 	w.Network = network
 	werr := w.WriteVault()
 	if werr != nil {
+		l.Error("NewTenantWallet error")
 		return w, werr
 	}
+	l.Debug("NewTenantWallet success")
 	return w, nil
 }
 

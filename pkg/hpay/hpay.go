@@ -167,6 +167,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	tenantStr := r.Header.Get(utils.HeaderPrefix() + "tenant")
 	l = l.WithField("tenant", tenantStr)
+	l.Debug("tenant from header")
 	renewReq := r.URL.Query().Get(utils.HeaderPrefix()+"renew") != ""
 	enableCache := true
 	if r.Header.Get(utils.HeaderPrefix()+"cache") != "" {
@@ -227,11 +228,16 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	metaD.UpstreamID = us.ID
 	l.WithField("meta", metaD).Debug("Got meta")
 	if metaD.Payment.Tenant == "" && tenantStr != "" {
+		l.WithField("tenant", tenantStr).Debug("tenant from header")
 		metaD.Payment.Tenant = tenantStr
 	} else if metaD.Payment.Tenant == "" && tenantStr == "" {
 		metaD.Payment.Tenant = os.Getenv("DEFAULT_TENANT")
 		l.WithField("tenant", metaD.Payment.Tenant).Debug("No tenant provided, using default")
+	} else if metaD.Payment.Tenant != "" {
+		l.WithField("tenant", metaD.Payment.Tenant).Debug("tenant from meta")
 	}
+
+	l.WithField("tenant", metaD.Payment.Tenant).Debug("tenant")
 	if cerr := ValidateRequestedClaims(metaD.Claims, us); cerr != nil {
 		l.Error("requested claims not valid for request")
 		http.Error(w, "requested claims not valid for request", http.StatusUnauthorized)
