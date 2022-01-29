@@ -106,7 +106,7 @@ func (w *Wallet) WriteVault() error {
 		"type":   w.Type,
 	})
 	l.Info("WriteVault")
-	if w.Tenant != "" {
+	if w.Tenant == "" {
 		w.Tenant = os.Getenv("DEFAULT_TENANT")
 		l.Info("WriteVault default tenant")
 	}
