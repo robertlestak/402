@@ -66,7 +66,7 @@ func parseMeta(h map[string]string) (*meta.Meta, error) {
 	if metaBase64Str == "" {
 		return nil, errors.New("no meta header")
 	}
-	metaD, err := base64.RawStdEncoding.DecodeString(metaBase64Str)
+	metaD, err := base64.StdEncoding.DecodeString(metaBase64Str)
 	if err != nil {
 		l.WithError(err).Error("Failed to decode meta header")
 		return nil, err

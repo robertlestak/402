@@ -29,7 +29,7 @@ func HeaderPrefix() string {
 }
 
 func Base64EncodeStripped(s string) string {
-	encoded := base64.RawStdEncoding.EncodeToString([]byte(s))
+	encoded := base64.StdEncoding.EncodeToString([]byte(s))
 	s = strings.TrimRight(encoded, "=")
 	s = strings.Replace(s, "/", "_", -1)
 	s = strings.Replace(s, "+", "-", -1)
@@ -42,7 +42,7 @@ func Base64DecodeStripped(s string) (string, error) {
 	}
 	s = strings.Replace(s, "_", "/", -1)
 	s = strings.Replace(s, "-", "+", -1)
-	decoded, err := base64.RawStdEncoding.DecodeString(s)
+	decoded, err := base64.StdEncoding.DecodeString(s)
 	return string(decoded), err
 }
 
@@ -174,7 +174,7 @@ func CreateSignature(p string) string {
 		l.WithError(serr).Error("Error encrypting signature")
 		return ""
 	}
-	bd := base64.RawStdEncoding.EncodeToString(ss)
+	bd := base64.StdEncoding.EncodeToString(ss)
 	return bd
 }
 
@@ -191,7 +191,7 @@ func ValidateSignature(r *http.Request) bool {
 		l.Error("Signature is empty")
 		return false
 	}
-	bd, berr := base64.RawStdEncoding.DecodeString(sig)
+	bd, berr := base64.StdEncoding.DecodeString(sig)
 	if berr != nil {
 		l.WithError(berr).Error("Failed to decode signature")
 		return false
