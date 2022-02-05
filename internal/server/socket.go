@@ -66,7 +66,7 @@ func handleAuth(id string, message *wsMessage) error {
 		}
 	}
 	l.WithField("claims", claims).Debug("JWT validated")
-	bdata, berr := base64.StdEncoding.DecodeString(payment.EncryptedMeta)
+	bdata, berr := base64.RawStdEncoding.DecodeString(payment.EncryptedMeta)
 	if berr != nil {
 		l.Error("base64 decode:", berr)
 		if err := conn.WriteJSON(wsMessage{Message: "base64 decode error"}); err != nil {

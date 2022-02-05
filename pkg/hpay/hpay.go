@@ -66,7 +66,7 @@ func parseMeta(h map[string]string) (*meta.Meta, error) {
 	if metaBase64Str == "" {
 		return nil, errors.New("no meta header")
 	}
-	metaD, err := base64.StdEncoding.DecodeString(metaBase64Str)
+	metaD, err := base64.RawStdEncoding.DecodeString(metaBase64Str)
 	if err != nil {
 		l.WithError(err).Error("Failed to decode meta header")
 		return nil, err
@@ -206,7 +206,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to request token", http.StatusInternalServerError)
 		return
 	}
-	rd, herr := us.GetResourceMetaService(resource, rt, enableCache)
+	rd, herr := us.GetResourceMetaService(r, resource, rt, enableCache)
 	if herr != nil {
 		l.WithError(herr).Error("Failed to get headers")
 		http.Error(w, "Failed to get headers", http.StatusInternalServerError)

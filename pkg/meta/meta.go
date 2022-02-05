@@ -70,7 +70,6 @@ func (m *Meta) Decrypt(encrypted string) error {
 	l.Debug("start")
 	defer l.Debug("end")
 	if encrypted == "" {
-		l.Debug("end")
 		return nil
 	}
 
