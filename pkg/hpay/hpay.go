@@ -165,6 +165,15 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "no resource")
 		return
 	}
+	if os.Getenv("LOG_LEVEL") == "debug" {
+		// dump request headers
+		for k, v := range r.Header {
+			l.WithFields(log.Fields{
+				"key":   k,
+				"value": v,
+			}).Debug("request header")
+		}
+	}
 	tenantStr := r.Header.Get(utils.HeaderPrefix() + "tenant")
 	l = l.WithField("tenant", tenantStr)
 	l.Debug("tenant from header")
