@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -29,6 +30,8 @@ const (
 	MethodHTTP HPayMethod = "http"
 	// MethodHTML represents a HTML GET request
 	MethodHTML HPayMethod = "html"
+	// MethodQuery represents a query string param request
+	MethodQuery HPayMethod = "query"
 )
 
 // HPayMethod represents the configured method for an upstream
@@ -277,40 +280,93 @@ RangeUpstreams:
 	return &Upstreams[0], nil
 }
 
+func (u *Upstream) QueryParamResource(r *http.Request, resource string, token string, enableCache bool) (map[string]string, error) {
+	l := log.WithFields(log.Fields{
+		"action":    "Upstream.QueryParamResource",
+		"resource":  resource,
+		"withToken": token != "",
+	})
+	l.Debug("start")
+	headers := make(map[string]string)
+	// as the initial request already contains the 402 values, we ignore cache, and do not cache
+	for k, v := range r.URL.Query() {
+		headers[k] = v[0]
+	}
+	_, resourceHeaders := splitResource402Headers(resource)
+	for k, v := range resourceHeaders {
+		headers[k] = v
+	}
+	headers = filterMeta(headers)
+	return headers, nil
+}
+
 // GetResourceMeta returns the meta data for the resource
-func (u *Upstream) GetResourceMeta(r string, token string, enableCache bool) (map[string]string, error) {
+func (u *Upstream) GetResourceMeta(r *http.Request, resource string, token string, enableCache bool) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
 		"action":    "Upstream.GetResourceMeta",
-		"resource":  r,
+		"resource":  resource,
 		"withToken": token != "",
 	})
 	l.Debug("start")
 	switch *u.Method {
 	case MethodHTTP:
-		return u.HeadResource(r, token, enableCache)
+		return u.HeadResource(resource, token, enableCache)
 	case MethodHTML:
-		return u.HTMLResource(r, token, enableCache)
+		return u.HTMLResource(resource, token, enableCache)
+	case MethodQuery:
+		return u.QueryParamResource(r, resource, token, enableCache)
 	default:
 		l.Errorf("Unknown method: %s", *u.Method)
 		return nil, errors.New("unknown method")
 	}
 }
 
+func splitResource402Headers(resource string) (string, map[string]string) {
+	l := log.WithFields(log.Fields{
+		"action": "splitResource402Headers",
+	})
+	l.Debug("start")
+	defer l.Debug("end")
+	headers := make(map[string]string)
+	newPath := resource
+	// parse resource as url to access query params
+	u, err := url.Parse(resource)
+	if err != nil {
+		l.WithError(err).Error("Failed to parse resource")
+		return "", nil
+	}
+	// get 402-specific headers
+	for k, v := range u.Query() {
+		if strings.HasPrefix(k, utils.HeaderPrefix()) {
+			headers[k] = v[0]
+		}
+		newPath = strings.Replace(newPath, "?"+k+"="+v[0], "", 1)
+		newPath = strings.Replace(newPath, "&"+k+"="+v[0], "", 1)
+	}
+	l.WithField("headers", headers).Debug("headers")
+	l.WithField("new_path", newPath).Debug("new path")
+	return newPath, headers
+}
+
 // GetResourceMetaService returns the meta data for the resource
-func (u *Upstream) GetResourceMetaService(r string, token string, enableCache bool) (map[string]string, error) {
+func (u *Upstream) GetResourceMetaService(r *http.Request, resource string, token string, enableCache bool) (map[string]string, error) {
 	l := log.WithFields(log.Fields{
 		"action":    "Upstream.GetResourceMetaService",
-		"resource":  r,
+		"resource":  resource,
 		"withToken": token != "",
 	})
 	l.Debug("start")
+	// query param requests already come with params in the initial request
+	if *u.Method == MethodQuery {
+		return u.QueryParamResource(r, resource, token, enableCache)
+	}
 	if os.Getenv("UPSTREAM_META_SERVICE") == "" {
 		l.Error("UPSTREAM_META_SERVICE not set, making upstream request from local")
-		return u.GetResourceMeta(r, token, enableCache)
+		return u.GetResourceMeta(r, resource, token, enableCache)
 	}
 	ur := &UpstreamMetaRequest{
 		Upstream: u,
-		Resource: r,
+		Resource: resource,
 		Token:    token,
 		Cache:    enableCache,
 	}
@@ -370,7 +426,7 @@ func HandleGetResourceMeta(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No upstream specified", http.StatusBadRequest)
 		return
 	}
-	um, err := mr.Upstream.GetResourceMeta(mr.Resource, mr.Token, mr.Cache)
+	um, err := mr.Upstream.GetResourceMeta(r, mr.Resource, mr.Token, mr.Cache)
 	if err != nil {
 		l.Errorf("Error getting resource meta: %s", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

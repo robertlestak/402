@@ -94,7 +94,7 @@ Servers can enable `402` on an endpoint by sending the following headers when th
 
 `x-402-request: [String Base64 JSON]`
 
-#### HTML
+#### html
 
 Serverless / static sites can enable hpay on a resource by setting `<meta>` tags in the `HTML` content (preferrably in the `<head>`).
 
@@ -103,6 +103,18 @@ Serverless / static sites can enable hpay on a resource by setting `<meta>` tags
 ```html
 <meta name="x-402-required" content="[Boolean]">
 <meta name="x-402-request" content="[String Base64 JSON]">
+```
+
+#### query
+
+For strictly demostrative purposes, the `query` method enables the *client* to provide `402` configuration params in the request URL query params. This is useful for PWAs or "interactive" client-side configuration builder tools that cannot make server-side changes. As this can be manipulated (or removed) by the client, this is inherently insecure, and should never be used in production. It is defined as a dedicated upstream configuration method to differentiate it from "truly enabled" upstreams - the upstream selector should be explicit to solely the demo page / interactive configuration tool to ensure there is no overlap with other configured selectors.
+
+**This should never be used in production**.
+
+##### Query Params
+
+```
+https://example.com/static-pwa/?x-402-required=[Boolean]&x-402-request=[String Base64 JSON]
 ```
 
 ## Encryption
