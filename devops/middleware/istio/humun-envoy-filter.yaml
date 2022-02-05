@@ -2,7 +2,7 @@ apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
   name: 402-auth
-  namespace: humun-core
+  namespace: humun-client-svcs
 spec:
   workloadSelector:
     labels:
@@ -69,11 +69,15 @@ spec:
               local streamInfo = request_handle:streamInfo()
               local certs = streamInfo:downstreamSslConnection():uriSanPeerCertificate()
               local h402sa = "spiffe://cluster.local/ns/humun-client-svcs/sa/hpay"
-              request_handle:logInfo(h402sa)
-              if table.contains(certs, h402sa) then
-              request_handle:logInfo("402 SA found, return")
+              local internalHumunClient = "spiffe://cluster.local/ns/humun-core/sa/default"
+              for header, value in pairs(certs) do
+                request_handle:logInfo("client cert "..value)
+              end
+              if table.contains(certs, h402sa) or table.contains(certs, internalHumunClient) then
+                request_handle:logInfo("402 SA found, return")
                 return
               end
+              request_handle:logInfo("calling 402 auth service")
               local headers, body = request_handle:httpCall(
                 "outbound|80||hpay.humun-client-svcs.svc.cluster.local",
                 {
