@@ -86,6 +86,7 @@ spec:
                   [":path"] = "/v1/_402?resource="..path,
                   ["x-402-token"] = token,
                   ["x-402-host"] = request_handle:headers():get("host"),
+                  ["x-402-signature"] = request_handle:headers():get("x-402-signature"),
                   ["x-402-tenant"] = "",
                   ["cookie"] = c
                 },
