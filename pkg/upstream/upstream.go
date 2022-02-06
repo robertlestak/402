@@ -174,6 +174,12 @@ func UpstreamForRequest(r *http.Request) (*Upstream, error) {
 		l.Error("No tenant specified, using DEFAULT_TENANT")
 		reqTenant = os.Getenv("DEFAULT_TENANT")
 	}
+	hostStr := r.Header.Get(utils.HeaderPrefix() + "host")
+	l = l.WithField("host", hostStr)
+	if hostStr == "" {
+		hostStr = r.Host
+	}
+	l.Debug("host from header")
 RangeUpstreams:
 	for _, u := range Upstreams {
 		if *u.Tenant != reqTenant {
@@ -198,11 +204,11 @@ RangeUpstreams:
 					selectorsMatch["hosts"] = true
 					break RangeHosts
 				}
-				if *s != r.Host {
+				if *s != hostStr {
 					ll.Debug("Host mismatch")
 					selectorsMatch["hosts"] = false
 					break RangeHosts
-				} else if strings.Contains(*s, "*") && strings.HasSuffix(r.Host, strings.ReplaceAll(*s, "*", "")) {
+				} else if strings.Contains(*s, "*") && strings.HasSuffix(hostStr, strings.ReplaceAll(*s, "*", "")) {
 					ll.Debug("Host wildcard prefix match")
 					selectorsMatch["hosts"] = true
 				} else {

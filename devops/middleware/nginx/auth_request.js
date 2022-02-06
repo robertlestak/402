@@ -3,6 +3,7 @@ function fetch(r) {
             body: null, 
                 headers: {
                     'x-402-token': r.headersIn['X-402-Token'],
+                    'x-402-host': r.headersIn['Host'],
                     'x-402-tenant': "",
                     'Cookie': r.headersIn['Cookie']
                 }
