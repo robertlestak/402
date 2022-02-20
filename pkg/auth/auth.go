@@ -13,7 +13,7 @@ import (
 
 	"github.com/golang-jwt/jwt"
 	"github.com/lestrrat-go/jwx/jwk"
-	"github.com/robertlestak/hpay/internal/utils"
+	"github.com/robertlestak/402/internal/utils"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -3,17 +3,17 @@ package main
 import (
 	"os"
 
-	"github.com/robertlestak/hpay/internal/cache"
-	"github.com/robertlestak/hpay/internal/cli"
-	"github.com/robertlestak/hpay/internal/db"
-	"github.com/robertlestak/hpay/internal/pubsub"
-	"github.com/robertlestak/hpay/internal/server"
-	"github.com/robertlestak/hpay/pkg/auth"
-	"github.com/robertlestak/hpay/pkg/hpay"
-	"github.com/robertlestak/hpay/pkg/payment"
-	"github.com/robertlestak/hpay/pkg/tenant"
-	"github.com/robertlestak/hpay/pkg/upstream"
-	"github.com/robertlestak/hpay/pkg/vault"
+	"github.com/robertlestak/402/internal/cache"
+	"github.com/robertlestak/402/internal/cli"
+	"github.com/robertlestak/402/internal/db"
+	"github.com/robertlestak/402/internal/pubsub"
+	"github.com/robertlestak/402/internal/server"
+	"github.com/robertlestak/402/pkg/auth"
+	"github.com/robertlestak/402/pkg/hpay"
+	"github.com/robertlestak/402/pkg/payment"
+	"github.com/robertlestak/402/pkg/tenant"
+	"github.com/robertlestak/402/pkg/upstream"
+	"github.com/robertlestak/402/pkg/vault"
 	log "github.com/sirupsen/logrus"
 )
 

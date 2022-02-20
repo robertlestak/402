@@ -10,12 +10,12 @@ import (
 
 	"github.com/go-redis/redis"
 	"github.com/gorilla/websocket"
-	"github.com/robertlestak/hpay/internal/pubsub"
-	"github.com/robertlestak/hpay/internal/utils"
-	"github.com/robertlestak/hpay/pkg/hpay"
-	"github.com/robertlestak/hpay/pkg/meta"
-	"github.com/robertlestak/hpay/pkg/payment"
-	"github.com/robertlestak/hpay/pkg/upstream"
+	"github.com/robertlestak/402/internal/pubsub"
+	"github.com/robertlestak/402/internal/utils"
+	"github.com/robertlestak/402/pkg/hpay"
+	"github.com/robertlestak/402/pkg/meta"
+	"github.com/robertlestak/402/pkg/payment"
+	"github.com/robertlestak/402/pkg/upstream"
 	log "github.com/sirupsen/logrus"
 )
 

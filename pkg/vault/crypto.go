@@ -12,8 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
-	"github.com/robertlestak/hpay/internal/utils"
-	"github.com/robertlestak/hpay/pkg/auth"
+	"github.com/robertlestak/402/internal/utils"
+	"github.com/robertlestak/402/pkg/auth"
 	log "github.com/sirupsen/logrus"
 )
 

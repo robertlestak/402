@@ -9,8 +9,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/robertlestak/hpay/internal/db"
-	"github.com/robertlestak/hpay/pkg/vault"
+	"github.com/robertlestak/402/internal/db"
+	"github.com/robertlestak/402/pkg/vault"
 	log "github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )

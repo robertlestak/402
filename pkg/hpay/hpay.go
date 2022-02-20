@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
-	"github.com/robertlestak/hpay/internal/utils"
-	"github.com/robertlestak/hpay/pkg/auth"
-	"github.com/robertlestak/hpay/pkg/meta"
-	"github.com/robertlestak/hpay/pkg/payment"
-	"github.com/robertlestak/hpay/pkg/tenant"
-	"github.com/robertlestak/hpay/pkg/upstream"
-	"github.com/robertlestak/hpay/pkg/vault"
+	"github.com/robertlestak/402/internal/utils"
+	"github.com/robertlestak/402/pkg/auth"
+	"github.com/robertlestak/402/pkg/meta"
+	"github.com/robertlestak/402/pkg/payment"
+	"github.com/robertlestak/402/pkg/tenant"
+	"github.com/robertlestak/402/pkg/upstream"
+	"github.com/robertlestak/402/pkg/vault"
 	log "github.com/sirupsen/logrus"
 )
 

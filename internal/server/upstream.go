@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/robertlestak/hpay/pkg/upstream"
+	"github.com/robertlestak/402/pkg/upstream"
 	"github.com/rs/cors"
 	log "github.com/sirupsen/logrus"
 )

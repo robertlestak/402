@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
-	"github.com/robertlestak/hpay/internal/utils"
-	"github.com/robertlestak/hpay/pkg/auth"
-	"github.com/robertlestak/hpay/pkg/payment"
+	"github.com/robertlestak/402/internal/utils"
+	"github.com/robertlestak/402/pkg/auth"
+	"github.com/robertlestak/402/pkg/payment"
 	log "github.com/sirupsen/logrus"
 )
 
