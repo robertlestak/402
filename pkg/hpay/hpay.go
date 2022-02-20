@@ -345,7 +345,17 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		WSURL: os.Getenv("WS_URL"),
 	}
 	w.WriteHeader(http.StatusPaymentRequired)
-	payment.TemplatedPage(w, pageData, "402.html")
+	// if accept json, return json otherwise return html
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(pageData); err != nil {
+			l.WithError(err).Error("Failed to encode json")
+			http.Error(w, "Failed to encode json", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		payment.TemplatedPage(w, pageData, "402.html")
+	}
 }
 
 // ValidateEncryptedPayment handles an untrusted payment request from a user. It will take the

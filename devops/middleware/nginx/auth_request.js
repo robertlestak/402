@@ -7,7 +7,8 @@ function fetch(r) {
                     'x-402-signature': r.headersIn['X-402-Signature'],
                     'x-402-host': r.headersIn['Host'],
                     'x-402-tenant': "",
-                    'Cookie': r.headersIn['Cookie']
+                    'Cookie': r.headersIn['Cookie'],
+                    'Accept': r.headersIn['Accept']
                 }
         })
 }
