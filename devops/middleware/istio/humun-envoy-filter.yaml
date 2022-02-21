@@ -111,6 +111,7 @@ spec:
               request_handle:logInfo("token validation status:"..status)
           
               if status ~= "200" then
+                request_handle:headers():add("x-402-required", "true")
                 request_handle:respond(headers,body)
               end
             end

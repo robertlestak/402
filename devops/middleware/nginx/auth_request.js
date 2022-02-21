@@ -21,6 +21,7 @@ function authorize(r) {
                     r.return(200)
                 } else {
                     r.status = 401;
+                    r.headersOut['x-402-required'] = 'true';
                     r.sendHeader();
                     r.finish()
                 }
