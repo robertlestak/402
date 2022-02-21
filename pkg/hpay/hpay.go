@@ -346,7 +346,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusPaymentRequired)
 	// if accept json, return json otherwise return html
-	if strings.Contains(r.Header.Get(utils.HeaderPrefix()+"accept"), "application/json") {
+	if strings.Contains(r.Header.Get("accept"), "application/json") {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(pageData); err != nil {
 			l.WithError(err).Error("Failed to encode json")
