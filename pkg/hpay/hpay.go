@@ -344,15 +344,21 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		Meta:  metaD,
 		WSURL: os.Getenv("WS_URL"),
 	}
+	// set payment required header
 	w.WriteHeader(http.StatusPaymentRequired)
+	// set 402 metadata headers
+	jd, jerr := json.Marshal(pageData)
+	if jerr != nil {
+		l.WithError(jerr).Error("Failed to marshal page data")
+		http.Error(w, "Failed to marshal page data", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(utils.HeaderPrefix()+"-meta", base64.StdEncoding.EncodeToString(jd))
+	w.Header().Set(utils.HeaderPrefix()+"reqiured", "true")
 	// if accept json, return json otherwise return html
 	if strings.Contains(r.Header.Get("accept"), "application/json") {
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(pageData); err != nil {
-			l.WithError(err).Error("Failed to encode json")
-			http.Error(w, "Failed to encode json", http.StatusInternalServerError)
-			return
-		}
+		w.Write(jd)
 	} else {
 		payment.TemplatedPage(w, pageData, "402.html")
 	}
