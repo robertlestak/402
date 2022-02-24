@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -38,23 +39,28 @@ func Cli() error {
 		if len(os.Args) < 4 {
 			return fmt.Errorf("usage: 402 cli create-token <tenant-id> <pid> <exp>")
 		}
-		tid := os.Args[3]
-		pid := os.Args[4]
-		var exp time.Duration
-		var expT time.Time
-		var err error
-		if len(os.Args) > 5 {
-			exp, err = time.ParseDuration(os.Args[5])
-			if err != nil {
-				return fmt.Errorf("usage: 402 cli create-token <tenant-id> <pid> <exp>")
-			}
-			expT = time.Now().Add(exp)
-		}
+		// args in format:
+		// 402 cli create-token claim1=val1 claim2=val2 ... exp=<exp>
 		claims := jwt.MapClaims{
-			"pid": pid,
-			"sub": tid,
 			"iss": os.Getenv("JWT_ISS"),
 		}
+		var expT time.Time
+		for i := 3; i < len(os.Args); i++ {
+			kv := strings.Split(os.Args[i], "=")
+			if len(kv) != 2 {
+				return fmt.Errorf("usage: 402 cli create-token claim1=val1 claim2=val2 ... exp=<exp>")
+			}
+			if kv[0] == "exp" {
+				exp, err := time.ParseDuration(kv[1])
+				if err != nil {
+					return fmt.Errorf("usage: 402 cli create-token claim1=val1 claim2=val2 ... exp=<exp>")
+				}
+				expT = time.Now().Add(exp)
+			} else {
+				claims[kv[0]] = kv[1]
+			}
+		}
+
 		if t, err := auth.GenerateSubJWT(claims, expT); err != nil {
 			return err
 		} else {
