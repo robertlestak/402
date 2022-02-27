@@ -92,7 +92,7 @@ spec:
                   ["cookie"] = c
                 },
                 nil,
-                5000)
+                30000)
               local status
               for header, value in pairs(headers) do
                 if header == ":status" then
