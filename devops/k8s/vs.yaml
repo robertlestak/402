@@ -9,6 +9,7 @@ spec:
   - "api.402.sh"
   gateways:
   - istio-system/ingressgateway
+  - istio-system/ingressgateway-ext
   http:
   - match:
     - uri:
