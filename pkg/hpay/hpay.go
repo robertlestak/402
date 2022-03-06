@@ -83,7 +83,8 @@ func parseMeta(h map[string]string) (*meta.Meta, error) {
 
 func requestToken(r *http.Request, resource string) (string, error) {
 	l := log.WithFields(log.Fields{
-		"action": "requestToken",
+		"action":   "requestToken",
+		"resource": resource,
 	})
 	l.Debug("start")
 	authTokens := utils.AuthTokens(r)
@@ -93,7 +94,8 @@ func requestToken(r *http.Request, resource string) (string, error) {
 	} else {
 		l.WithField("auth_tokens", authTokens).Debug("auth tokens in request, searching for most granular")
 		var token string
-		if rc, ok := authTokens[resource]; ok {
+		b64Res := utils.Base64EncodeStripped(resource)
+		if rc, ok := authTokens[b64Res]; ok {
 			l.WithField("resource", resource).Debug("found resource claim")
 			token = rc
 		} else if hc, ok := authTokens[utils.HeaderPrefix()+"token"]; ok {
@@ -110,6 +112,15 @@ func requestToken(r *http.Request, resource string) (string, error) {
 		}
 		if token != "" {
 			l.WithField("token", token).Debug("found token")
+			// if token is in name=value format, split and return only value
+			if strings.Contains(token, "=") {
+				l.Debug("token is in name=value format")
+				spl := strings.Split(token, "=")
+				// remove first element (name)
+				spl = spl[1:]
+				// join remaining elements
+				token = strings.Join(spl, "=")
+			}
 			return token, nil
 		}
 	}
@@ -119,7 +130,8 @@ func requestToken(r *http.Request, resource string) (string, error) {
 
 func requestClaims(r *http.Request, resource string) (jwt.MapClaims, error) {
 	l := log.WithFields(log.Fields{
-		"action": "requestClaims",
+		"action":   "requestClaims",
+		"resource": resource,
 	})
 	l.Debug("start")
 	defer l.Debug("end")
@@ -165,6 +177,7 @@ func HandleRequest(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "no resource")
 		return
 	}
+	l = l.WithField("resource", resource)
 	if os.Getenv("LOG_LEVEL") == "debug" {
 		// dump request headers
 		for k, v := range r.Header {
