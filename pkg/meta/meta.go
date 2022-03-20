@@ -52,6 +52,12 @@ func (m *Meta) GenerateToken() (string, error) {
 	if _, ok := m.Claims["tid"]; !ok && m.Payment.Tenant != "" {
 		m.Claims["tid"] = m.Payment.Tenant
 	}
+	if m.Payment.Txid != "" {
+		m.Claims["txid"] = m.Payment.Txid
+	}
+	if m.Claims["txnet"] != "" {
+		m.Claims["txnet"] = m.Payment.Network
+	}
 	token, err := auth.GenerateJWT(m.Claims, exp, utils.TokenKeyID())
 	if err != nil {
 		l.Error(err)

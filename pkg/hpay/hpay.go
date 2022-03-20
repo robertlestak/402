@@ -42,6 +42,12 @@ func ValidateRequestedClaims(claims jwt.MapClaims, us *upstream.Upstream) error 
 	if _, ok := claims["tid"]; ok {
 		return errors.New("tid claim is protected")
 	}
+	if _, ok := claims["txid"]; ok {
+		return errors.New("txid claim is protected")
+	}
+	if _, ok := claims["txnet"]; ok {
+		return errors.New("txnet claim is protected")
+	}
 	return nil
 }
 
